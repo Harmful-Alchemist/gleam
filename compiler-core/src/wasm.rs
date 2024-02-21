@@ -6,7 +6,6 @@ use std::{fmt::Debug, sync::Arc};
 
 use crate::ast::{Assignment, CallArg, CustomType, Definition, Function, Pattern, Statement, TypedExpr};
 use crate::type_::{ModuleInterface, Type};
-//TODO non-ascii names and upper-case var names.
 //TODO i32 widening? Check Gleam expectations.
 
 pub trait Wasmable {
@@ -55,7 +54,7 @@ struct WasmFuncDef {
 
 impl Wasmable for WasmFuncDef {
     fn to_wat(&self) -> EcoString {
-        "".into() //TODO I don't think we need the sections in wat
+        "".into() //TODO I don't think we need the sections in wat for structs and func refs prolly tho
     }
 }
 
@@ -71,7 +70,7 @@ impl Wasmable for WasmStructDef {
         self.fields.iter().for_each(|f|
             acc.push_str(&mut format!(" (field ${} {})", f.0.name, f.1.to_wat()))
         );
-        acc.push_str("))"); //TODO move somewhere else the \n?
+        acc.push_str("))");
         acc.into()
     }
 }
@@ -81,9 +80,6 @@ impl Wasmable for WasmType {
         match self {
             WasmType::I32 => "i32".into(),
             WasmType::ConcreteRef(x) => {
-                //TODO the ref idx, doesn't work for wat, since functions are gone.....
-                // format!("(ref {}  (;{};))", index, x.name).into()
-                // but we don't have the full info here hmmmmmmmmmmmmmmmmmm
                 format!("(ref ${})", x.name).into()
             }
         }
@@ -92,8 +88,6 @@ impl Wasmable for WasmType {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 struct WasmVar {
-    //TODO rename to WasmIndex?
-    // idx: u32,
     name: EcoString,
 }
 
@@ -105,7 +99,6 @@ impl Wasmable for WasmVar {
 
 #[derive(Debug)]
 struct WasmFunction {
-    // info: WasmVar,
     args: Vec<(WasmVar, WasmType)>,
     def: WasmFuncDef,
     body: Vec<WasmInstruction>,
@@ -140,14 +133,13 @@ impl Wasmable for WasmFunction {
 enum WasmInstruction {
     LocalGet(WasmVar),
     LocalSet(WasmVar),
-    // Const(WasmType, WasmVar),
     Call { func: WasmVar, args: Vec<WasmInstruction> },
     Function(WasmFunction),
     I32Add(Vec<WasmInstruction>),
     I32Sub(Vec<WasmInstruction>),
     I32Const(i32),
     StructNew(WasmVar),
-    StructGet(WasmVar, WasmVar), //Type Field
+    StructGet(WasmVar, WasmVar),
 }
 
 impl Wasmable for WasmInstruction {
@@ -182,13 +174,6 @@ pub(crate) struct WasmThing {
     wasm_instructions: RefCell<Vec<WasmInstruction>>,
     type_section: RefCell<Vec<WasmTypeSectionEntry>>,
     functions_type_section_index: RefCell<HashMap<EcoString, (u32, u32)>>,
-    // pub(crate) wasm_instructions: RefCell<Vec<ModuleField<'static>>>,
-    // //AST
-    // //Id is pretty private :( identifiers: HashMap<&'a str, Id<'a>>, // Symbol table, but not really, wanted to use for wasm names but unnecessary byte code. Will matter if we do in Gleam  "let x=1; ds(x);"
-    // pub(crate) identifiers: HashMap<String, usize>,
-    // //globals?
-    // pub(crate) known_types: RefCell<HashMap<&'static str, ValType<'static>>>,
-    // pub(crate) function_names: HashMap<&'static str, (&'static str, u32)>,
 }
 
 impl WasmThing {
@@ -202,26 +187,7 @@ impl WasmThing {
     }
 }
 
-// pub(crate) fn known_types() -> RefCell<HashMap<&'static str, ValType<'static>>> {
-//     let mut map = HashMap::new();
-//     let _ = map.insert("Int", ValType::I32);
-//     RefCell::new(map)
-// }
-
 impl WasmThing {
-    // TODO remember wasm is stack based so arguments before functions :)
-
-
-    // TODO give <'a> fn new(gleam_module: crate::ast::Module<crate::type_::ModuleInterface, crate::ast::Definition<Arc<crate::type_::Type>, crate::ast::TypedExpr, EcoString, EcoString>>) -> WasmThing<'a> {
-    //     WasmThing {
-    //         gleam_module,
-    //         wasm_instructions: vec![],
-    //         identifiers: Default::default(),
-    //         known_types: known_types()
-    //         // TODO prolly need types imported and a whole thing when getting some more
-    //     }
-    // }
-
     pub(crate) fn transform(&self) -> () {
         for gleam_definition in &self.gleam_module.definitions {
             self.transform_gleam_definition(gleam_definition);
@@ -283,11 +249,8 @@ impl WasmThing {
             self.type_section.borrow_mut().push(WasmTypeSectionEntry::PlaceHolder("".into()));
         }
         self.type_section.borrow_mut()[type_section_idx] = WasmTypeSectionEntry::Struct(struct_def.clone());
-        // dbg!(self.type_section.borrow());
 
         let constructor_name = name;
-        // constructor_name.push_str("_constructor"); // Oh the type and constructor same name hmmmmm else we dont know we call really
-        // TODO or push for func name but put in the hasmap differently
         let constructor_idx = type_section_idx + 1;
         let fun_len = self.functions_type_section_index.borrow().len();
         let _ = self.functions_type_section_index.borrow_mut().insert(constructor_name.clone(), (constructor_idx as u32, fun_len as u32)); //TODO get or insert? Maybe used already? Then need place holder in two places :P
@@ -356,7 +319,6 @@ impl WasmThing {
 
         let func_def = WasmFuncDef {
             info: wasm_var,
-            // params: arguments.iter().map(|x| x.1.clone()).collect(),
             return_type: result_type,
             exported: gleam_function.public,
         };
@@ -365,9 +327,7 @@ impl WasmThing {
             //TODO while! Maybe? Thiink more
             self.type_section.borrow_mut().push(WasmTypeSectionEntry::PlaceHolder("".into()));
         }
-        // dbg!(self.type_section.borrow());
         self.type_section.borrow_mut()[loc.0 as usize] = WasmTypeSectionEntry::Function(func_def.clone()); //TODO grow vec if necess
-        // dbg!(self.type_section.borrow());
 
         let wasm_func = WasmInstruction::Function(
             WasmFunction {
@@ -451,16 +411,12 @@ impl WasmThing {
                 let mut instrs = Vec::with_capacity(args.len() + 1);
                 let mut locals = Vec::new();
                 for CallArg { value, .. } in args {
-                    // TODO Or this after call?
-                    // let mut new_scope = HashMap::new(); panics hehe, vars not in scope..
                     let (mut is, mut ls) = self.transform_gleam_expression(value, scope);
                     instrs.append(&mut is);
                     locals.append(&mut ls);
                 }
 
                 let fn_name = if let TypedExpr::Var { name, .. } = fun.as_ref() {
-                    //TODO the start end is stupid, besides Var has more info that gets to fn name directly, also it's the loc of the call not the func
-                    // self.start_end_names.get(&(location.start,location.end)).unwrap()
                     name
                 } else {
                     dbg!(&fun);
@@ -473,7 +429,6 @@ impl WasmThing {
                     },
                     args: instrs,
                 };
-                // instrs.push(call);
                 return (vec![call], locals);
             }
             TypedExpr::RecordAccess { record, label, .. } => {
@@ -538,14 +493,6 @@ impl WasmThing {
         (instructions, locals)
     }
 
-    // fn transform_gleam_bin_op(&self, name: &BinOp) -> WasmInstruction {
-    //     match name {
-    //         BinOp::AddInt => WasmInstruction::I32Add,
-    //         BinOp::SubInt => WasmInstruction::I32Sub,
-    //         _ => todo!(),
-    //     }
-    // }
-
     fn transform_gleam_type(&self, type_: &Type) -> WasmType {
         match type_ {
             Type::Named { name, .. } =>
@@ -572,7 +519,6 @@ impl WasmThing {
                         if idx == len {
                             self.type_section.borrow_mut().push(WasmTypeSectionEntry::PlaceHolder(EcoString::from(x.clone())));
                         }
-                        // dbg!(self.type_section.borrow());
 
                         let x = EcoString::from(x.clone());
 
@@ -589,10 +535,6 @@ impl WasmThing {
 
 impl Wasmable for WasmThing {
     fn to_wat(&self) -> EcoString {
-        // not necess I guess... Maybe for structs.., TODO!
-        // let types = self.type_section.borrow().iter().map(|x| x.to_wat())
-        //     .reduce(|mut acc, x| {acc.push_str("\n");acc.push_str(&x); acc}).unwrap();
-
         let types = self.type_section.borrow().iter()
             .map(|x| x.to_wat())
             .reduce(|mut acc, x| {
@@ -642,7 +584,6 @@ mod tests {
     ) -> crate::ast::Module<ModuleInterface, Definition<Arc<Type>, TypedExpr, EcoString, EcoString>> {
         let parsed = crate::parse::parse_module(program).expect("syntax error");
         let module = parsed.module;
-        // println!("{module:?}");
         let ids = crate::uid::UniqueIdGenerator::new();
         let small = ecow::EcoString::from("Welcome");
         let mut hs = HashMap::new();
@@ -743,8 +684,6 @@ mod tests {
           ",
         );
 
-        //TODO not the nicest wat with the x+1, still legal tho....
-
         let w = WasmThing {
             gleam_module,
             wasm_instructions: RefCell::new(vec![]),
@@ -779,23 +718,6 @@ mod tests {
           }",
         );
 
-        //TODO oh no also not deterministic! WTFFFFFFFFFF! Is it the gleam module? YEs
-        // work back from:
-        // 29    29 │ 0x7F
-        // 30    30 │ 0x03
-        // 31    31 │ 0x03
-        // 32    32 │ 0x02
-        // 33 │+0x02
-        // 33    34 │ 0x01
-        // 34       │-0x02
-        // 35    35 │ 0x07
-        // 36    36 │ 0x07
-        // 37    37 │ 0x01
-        // 38    38 │ 0x03
-
-        // So sort the exports lol, then makes sense if it changes what function is reffered to with a function index lol....
-
-
         let w = WasmThing {
             gleam_module,
             wasm_instructions: RefCell::new(vec![]),
@@ -814,50 +736,6 @@ mod tests {
         let _ = file.write_all(&wasm);
 
         insta::assert_snapshot!(wat);
-//
-//
-//     //TODO: Uncaught (in promise) CompileError: wasm validation error: at offset 43: type mismatch: expression has type i64 but expected structref
-//     // but we do get bytes.... not promising! Since encode doesn't catch it....
-//     // Ok new error: CompileError: wasm validation error: at offset 46: not a struct type
-//     // Yeah cause function does it's own magic (on wasm tools side) to add to the types at top of module, but struct not so much...
-//     // Ok now: CompileError: wasm validation error: at offset 68: popping value from empty stack
-//     // Lol was using firefox, maybe no GC? Chrome has better errors: WebAssembly.instantiateStreaming(): Compiling function #1 failed: not enough arguments on the stack for struct.get (need 1, got 0) @+68
-// // Can also do: wasm2wat -v --enable-gc compiler-core/letstry.wasm
-//     // now error (Chrome) is: Compiling function #1 failed: struct.get[0] expected type (ref null 0), found local.get of type structref @+68
-// //Ok sure firefox supports it too
-//
-//     // wasm2wat still thinks it's wrong even with --enable-all: 0000017: error: expected valid result type (got -0x1c)
-//     // And the problem is the "0x64 0x00" return type of the constructor... parsed as -0x1c, checked by changing that 0x64 byte, will change te -0x1c error msg, wild!
-//     // ex: change to 0x63 will say: "000001f: error: expected valid result type (got -0x1d)"
-//     // browsers still parse em...
-//     // And spec says it's allowed in return type?
-//     // check issues: maybe https://github.com/WebAssembly/wabt/issues/2364 (see also: https://github.com/WebAssembly/wabt/pull/2363)? Lol is ref encoded as 0x6b instead of 0x64, that's be nice haha
-//     // or https://github.com/WebAssembly/wabt/issues/2333 weird! Has the enable flag but no support?
-//     // also --enable-gc does allow it to process the 0x5f struct type flag..
-//     // prolly problem here: https://github.com/WebAssembly/wabt/blob/main/include/wabt/type.h#L47 Oh wel..
-//     // Eh no compiled locally with line 47 changed the problem is bigger. Also if I change to 6b in file won't fix with original.
-//     // Aaah enable more features: /home/harm/git/wabt/build/wasm2wat --enable-all -v /home/harm/git/gleam/compiler-core/letstry.wasm
-//     // new error: 0000056: error: unexpected opcode: 0xfb
-//     // Ah crap that's struct.new, well if it's not supported it really is not supported....
-//
-//     //TODO so the concrete types are fine now, but would like abstract struct when returning an enum variant, then you'd need structref (well non-nullable right, I mean...)
-//
-//     // dbg!(&gleam_module);
-//     // assert!(false);
-//     //TODO what the cat type looks like is in module.types
-//
-//     let w = WasmThing {
-//         gleam_module,
-//         wasm_instructions: RefCell::new(vec![]),
-//         identifiers: Default::default(),
-//         known_types: known_types(), // TODO prolly need types imported and a whole thing when getting some more
-//         function_names: HashMap::new(),
-//     };
-//     let res = w.transform().unwrap();
-//     let mut file = File::create("letstry.wasm").unwrap();
-//
-//     let _ = file.write_all(&res);
-//     // assert!(false);
     }
 
     #[test]
