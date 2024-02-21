@@ -6,7 +6,6 @@ use std::{fmt::Debug, sync::Arc};
 
 use crate::ast::{Assignment, CallArg, CustomType, Definition, Function, Pattern, Statement, TypedExpr};
 use crate::type_::{ModuleInterface, Type};
-//TODO i32 widening? Check Gleam expectations.
 
 pub trait Wasmable {
     fn to_wat(&self) -> EcoString;
