@@ -4,8 +4,6 @@ expression: wat
 ---
 (module
 (func $internal_add (param $x i32) (param $y i32) (result i32)
-    (local.get $x)
-    (local.get $y)
-    (i32.add))
+    (i32.add (local.get $x) (local.get $y)))
 (func $add (export "add") (param $x i32) (param $y i32) (result i32)
-    (call $internal_add (local.get $x) (i32.const 1) (i32.add) (local.get $y))))
+    (call $internal_add (i32.add (local.get $x) (i32.const 1)) (local.get $y))))

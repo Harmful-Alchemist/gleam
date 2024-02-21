@@ -143,8 +143,8 @@ enum WasmInstruction {
     // Const(WasmType, WasmVar),
     Call { func: WasmVar, args: Vec<WasmInstruction> },
     Function(WasmFunction),
-    I32Add,
-    I32Sub,
+    I32Add(Vec<WasmInstruction>),
+    I32Sub(Vec<WasmInstruction>),
     I32Const(i32),
     StructNew(WasmVar),
     StructGet(WasmVar, WasmVar), //Type Field
@@ -156,18 +156,24 @@ impl Wasmable for WasmInstruction {
             WasmInstruction::LocalGet(x) => { format!("local.get ${}", x.name).into() }
             WasmInstruction::LocalSet(x) => { format!("local.set ${}", x.name).into() }
             WasmInstruction::Call { func, args } => {
-                format!("call ${}{}", func.name, args.iter().map(|x| format!(" ({})", x.to_wat())).reduce(|mut acc, x| {
-                    acc.push_str(&x);
-                    acc
-                }).unwrap_or(String::from(""))).into()
+                format!("call ${}{}", func.name, args.to_wat()).into()
             }
             WasmInstruction::Function(x) => { x.to_wat() }
-            WasmInstruction::I32Add => { "i32.add".into() }
-            WasmInstruction::I32Sub => { "i32.sub".into() }
+            WasmInstruction::I32Add(xs) => { format!("i32.add{}", xs.to_wat()).into() }
+            WasmInstruction::I32Sub(xs) => { format!("i32.sub{}", xs.to_wat()).into() }
             WasmInstruction::I32Const(x) => { format!("i32.const {x}").into() }
             WasmInstruction::StructNew(x) => { format!("struct.new ${}", x.name).into() }
             WasmInstruction::StructGet(struc, field) => { format!("struct.get ${} ${}", struc.name, field.name).into() }
         }
+    }
+}
+
+impl Wasmable for Vec<WasmInstruction> {
+    fn to_wat(&self) -> EcoString {
+        self.iter().map(|x| format!(" ({})", x.to_wat())).reduce(|mut acc, x| {
+            acc.push_str(&x);
+            acc
+        }).unwrap_or(String::from("")).into()
     }
 }
 
@@ -420,12 +426,18 @@ impl WasmThing {
             TypedExpr::BinOp {
                 name, left, right, ..
             } => {
+                let mut op_instrs = Vec::new();
                 let mut ls = self.transform_gleam_expression(left.as_ref(), scope);
-                instructions.append(&mut ls.0);
+                op_instrs.append(&mut ls.0);
                 locals.append(&mut ls.1);
                 let mut rs = self.transform_gleam_expression(right.as_ref(), scope);
-                instructions.append(&mut rs.0);
-                instructions.push(self.transform_gleam_bin_op(name));
+                op_instrs.append(&mut rs.0);
+                let op = match name {
+                    BinOp::AddInt => WasmInstruction::I32Add(op_instrs),
+                    BinOp::SubInt => WasmInstruction::I32Sub(op_instrs),
+                    _ => todo!()
+                };
+                instructions.push(op);
                 locals.append(&mut rs.1);
             }
             TypedExpr::Var { name, .. } => {
@@ -526,13 +538,13 @@ impl WasmThing {
         (instructions, locals)
     }
 
-    fn transform_gleam_bin_op(&self, name: &BinOp) -> WasmInstruction {
-        match name {
-            BinOp::AddInt => WasmInstruction::I32Add,
-            BinOp::SubInt => WasmInstruction::I32Sub,
-            _ => todo!(),
-        }
-    }
+    // fn transform_gleam_bin_op(&self, name: &BinOp) -> WasmInstruction {
+    //     match name {
+    //         BinOp::AddInt => WasmInstruction::I32Add,
+    //         BinOp::SubInt => WasmInstruction::I32Sub,
+    //         _ => todo!(),
+    //     }
+    // }
 
     fn transform_gleam_type(&self, type_: &Type) -> WasmType {
         match type_ {
