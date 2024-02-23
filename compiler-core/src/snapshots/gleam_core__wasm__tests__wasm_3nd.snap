@@ -10,4 +10,6 @@ expression: wat
     (local.set $z)
     (i32.const 100)
     (local.set $a)
-    (i32.add (i32.add (i32.add (local.get $x) (local.get $y)) (local.get $z)) (local.get $a))))
+    (i32.add (i32.add (i32.add (local.get $x) (local.get $y)) (local.get $z)) (local.get $a)))
+(@producers (language "Gleam" "1.0.0-rc2"))
+)

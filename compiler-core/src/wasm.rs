@@ -558,6 +558,9 @@ impl Wasmable for WasmThing {
             module.push_str("\n");
         }
         module.push_str(&instructions);
+        //TODO add @producers see ../trying_some.wat, might be nice... Do we have the gleam version somewhere? https://github.com/WebAssembly/tool-conventions/blob/main/ProducersSection.md
+        let version = env!("CARGO_PKG_VERSION");
+        module.push_str(&format!("\n(@producers (language \"Gleam\" \"{}\"))\n", version));
         module.push_str(")");
         module
     }

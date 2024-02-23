@@ -12,4 +12,6 @@ expression: wat
     (local $cat1 (ref $Cat_struct))
     (call $Cat (local.get $x) (local.get $y))
     (local.set $cat1)
-    (i32.add (local.get $cat1) (struct.get $Cat_struct $cuteness) (local.get $cat1) (struct.get $Cat_struct $name))))
+    (i32.add (local.get $cat1) (struct.get $Cat_struct $cuteness) (local.get $cat1) (struct.get $Cat_struct $name)))
+(@producers (language "Gleam" "1.0.0-rc2"))
+)

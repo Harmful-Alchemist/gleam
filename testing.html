@@ -3,17 +3,38 @@
 <head>
     <meta charset="utf-8">
     <title>Test wasm</title>
-
+<!--    <script src="thuh.js"></script>-->
     <script>
         const importObject = {
-            imports: {imported_func: (arg) => console.log(arg)},
+            // imports: {imported_func: (arg) => console.log(arg)}, Aah with a different module can make a map of functions to names and put that in imports, the imports name is not special! Could put the gleam mjs there but(!) then tie it to js...
+            imports: {"console.log": console.log } //So this works and we can get it... But is annoying we have to call outside.....
+            // But how else are you going to do I/O, wasi https://wasi.dev/ ?
+            // Browser polyfill: https://github.com/bjorn3/browser_wasi_shim ? Meh. Well maybe the meh is that you have to use it,
+            // could still provide a nice way to do gleam/io maybe? But I'd say  @external with something we have now could be good too, easier anyway!
+
+            // Or re-use the mjs: https://github.com/gleam-lang/stdlib/blob/main/src/gleam_stdlib.mjs#L294 ??? That'd be fun and allow one by one rewrite?
+            // interesting: https://github.com/gleam-lang/stdlib/blob/main/src/gleam/io.gleam#L21
+
+            // Tho "At the WebAssembly level, WASI is just a set of callable functions that can be imported by a .wasm module,
+            // and these imports can be implemented in a variety of ways,
+            // including by a JavaScript polyfill library running within browsers."
+
+            // Aaah Strings in Gleam just UTF-8 see stdlib
+
         };
 
-        WebAssembly.instantiateStreaming(fetch("compiler-core/letstry.wasm"), importObject).then(
+        WebAssembly.instantiateStreaming(fetch("compiler-core/letstry.wasm")).then(
             (obj) => {
                 let ans = obj.instance.exports.add(1, 2);
                 console.log(ans);
                 document.getElementById("answer").textContent = ans;
+            },
+        );
+
+        WebAssembly.instantiateStreaming(fetch("trying_some.wasm"), importObject).then(
+            (obj) => {
+                obj.instance.exports.log();
+                console.log("ok... done? 42 above?");
             },
         );
     </script>

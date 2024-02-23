@@ -25,4 +25,6 @@ expression: wat
     (local.set $kitten)
     (call $grow (local.get $kitten))
     (local.set $cat)
-    (call $add_cat (local.get $cat))))
+    (call $add_cat (local.get $cat)))
+(@producers (language "Gleam" "1.0.0-rc2"))
+)
