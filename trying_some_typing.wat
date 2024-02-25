@@ -1,12 +1,13 @@
 (module
-(type $result_struct (sub (struct (field $idx i32)))) ;;Ordering not sub-types after super types!
-(type $ok_struct (sub final $result_struct (struct (field $idx i32) (field $val i32))))
-(type $err_struct (sub final $result_struct (struct (field $idx i32) (field $error i64))))
+(type $result_struct (sub (struct (field $idx i8)))) ;;Ordering not sub-types after super types! i8 will work to 256 variants?
+;; Should be plenty for everyone right?
+(type $ok_struct (sub final $result_struct (struct (field $idx i8) (field $val i32))))
+(type $err_struct (sub final $result_struct (struct (field $idx i8) (field $error i64))))
 
 (func $matching (param $in (ref $result_struct)) (result i64)
     (block $ok_block
         (block $err_block
-            (br_table $ok_block $err_block (local.get $in) struct.get $result_struct $idx)
+            (br_table $ok_block $err_block (local.get $in) struct.get_u $result_struct $idx)
     ) ;; end err_block
     (local.get $in)
     (ref.cast (ref $err_struct))
