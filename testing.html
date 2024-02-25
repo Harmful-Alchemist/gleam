@@ -37,6 +37,13 @@
                 console.log("ok... done? 42 above?");
             },
         );
+
+        WebAssembly.instantiateStreaming(fetch("trying_some_typing.wasm")).then(
+            (obj) => {
+                let ans = obj.instance.exports.lessee();
+                document.getElementById("answer_type").textContent = ans;
+            },
+        );
     </script>
 </head>
 <body>
@@ -46,5 +53,9 @@
 
 $> 1+2 =
 <div id="answer"></div>
+<br>
+<br>
+Playing with types:
+<div id="answer_type"></div>
 </body>
 </html>
