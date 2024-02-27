@@ -44,6 +44,34 @@
                 document.getElementById("answer_type").textContent = ans;
             },
         );
+
+
+        // Prolly is a red herring but arrays & structs are in the Store, which has memory but also arrays structs etc. So we'll see.
+        const memory = new WebAssembly.Memory({
+            initial: 10,
+            maximum: 100,
+        });
+
+        WebAssembly.instantiateStreaming(fetch("trying_some_arrays.wasm"), {
+            js: { mem: memory }}).then(
+            (obj) => {
+                // const summands = new Uint32Array(memory.buffer);
+                // console.log(memory.buffer);
+
+                //TODO not sure of wasm needs to use this memory, prolly with import... And Besides WebAssembly.Memory we have WebAssembly.Table. Maybe a extra type for the heap? structs/arrays?
+                // exports then hmmmmmmmmmmmmmmmmmmmmmmmmmm
+
+                let access = obj.instance.exports.accessing(1);
+                let ans = obj.instance.exports.lol();
+                // console.log(memory.buffer);
+                // let x = new Uint32Array(memory.buffer).filter(x => x!==0) //Empty!
+                // console.log(x);
+                // console.log(obj);
+                console.log(ans); //An object with no properties... So hmmmmmmmmmmmmm
+                document.getElementById("array_index").textContent = access;
+                document.getElementById("array").textContent = ans;
+            },
+        );
     </script>
 </head>
 <body>
@@ -57,5 +85,14 @@ $> 1+2 =
 <br>
 Playing with types:
 <div id="answer_type"></div>
+<br>
+<br>
+<h3>Playing with arrays:</h3>
+<br>
+Whole:
+<div id="array"></div>
+<br>
+At index:
+<div id="array_index"></div>
 </body>
 </html>

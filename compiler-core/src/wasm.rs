@@ -1,11 +1,13 @@
 use crate::ast::BinOp;
 use ecow::EcoString;
 use im::HashMap;
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::{fmt::Debug, sync::Arc};
+use std::borrow::Borrow;
+use rand::distributions::uniform::SampleBorrow;
 
 use crate::ast::{Assignment, CallArg, CustomType, Definition, Function, Pattern, Statement, TypedExpr};
-use crate::type_::{ModuleInterface, Type};
+use crate::type_::{ModuleInterface, Type, TypeVar};
 
 pub trait Wasmable {
     fn to_wat(&self) -> EcoString;
@@ -139,6 +141,8 @@ enum WasmInstruction {
     I32Const(i32),
     StructNew(WasmVar),
     StructGet(WasmVar, WasmVar),
+    ArrayNew(WasmType,u32),
+    ArraySet(u32,Vec<WasmInstruction>),
 }
 
 impl Wasmable for WasmInstruction {
@@ -155,6 +159,7 @@ impl Wasmable for WasmInstruction {
             WasmInstruction::I32Const(x) => { format!("i32.const {x}").into() }
             WasmInstruction::StructNew(x) => { format!("struct.new ${}", x.name).into() }
             WasmInstruction::StructGet(struc, field) => { format!("struct.get ${} ${}", struc.name, field.name).into() }
+            WasmInstruction::ArrayNew(type_,len) => {format!("array.new_fixed {} {}", type_.to_wat(), len).into()} //TODO immutable lists sure, but in Gleam, why in Wasm? About the fixed size at least. Revisit if we use array.copy and extend those. We could also use array.init_data or array.init_elem if we put initial values in the right place.
         }
     }
 }
@@ -484,6 +489,39 @@ impl WasmThing {
 
                 return (instrs, locals);
             }
+            TypedExpr::List { elements, typ, .. } => {
+                let type_of_list: WasmType = match typ.borrow() {
+                    Type::Named { name, args, .. } => {
+                        if name.as_str() != "List" || args.len() != 1 {
+                            todo!() //TODO I think prolly this doesn't happen but check it!
+                        }
+
+                        if let Type::Var { type_ } = args[0].borrow() {
+                            let t: &RefCell<TypeVar> = type_.borrow();
+                            let t = &*t.borrow();
+                            match t {
+                                TypeVar::Link { type_ } => {
+                                    self.transform_gleam_type(type_.borrow())
+                                }
+                                _ => todo!()
+                            }
+                        } else {
+                            todo!()
+                        }
+                    }
+                    _ => { todo!() }
+                };
+
+
+                let mut instructions = vec![WasmInstruction::ArrayNew(type_of_list, elements.len() as u32)];
+
+                for (i,elem) in elements.iter().enumerate()  {
+                    //TODO add
+                    instructions.push(WasmInstruction::ArraySet(i as u32, self.transform_gleam_expression(elem,scope).0))
+                }
+
+                return (instructions, vec![]);
+            }
             x => {
                 dbg!(x);
                 todo!()
@@ -763,6 +801,37 @@ type Kitten {Kitten(name: Int, age: Int, cuteness: Int) }
             let kitten = Kitten(name: x, cuteness: y, age: 12)
             let cat = grow(kitten)
             add_cat(cat)
+          }",
+        );
+
+
+        let w = WasmThing {
+            gleam_module,
+            wasm_instructions: RefCell::new(vec![]),
+            type_section: RefCell::new(vec![]),
+            functions_type_section_index: RefCell::new(Default::default()),
+        };
+        w.transform();
+
+        let wat = w.to_wat();
+        let mut file = File::create("letstry.wat").unwrap();
+        let _ = file.write_all(wat.as_bytes());
+
+        let wasm = wat::parse_str(wat.clone()).unwrap();
+
+        let mut file = File::create("letstry.wasm").unwrap();
+        let _ = file.write_all(&wasm);
+
+        insta::assert_snapshot!(wat);
+    }
+
+    #[test]
+    fn wasm_7nd() {
+//TODO pub types!
+        let gleam_module = trying_to_make_module(
+            "
+        pub fn a_list() -> List(Int) {
+            [1,2,3]
           }",
         );
 
