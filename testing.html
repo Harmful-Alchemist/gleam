@@ -61,15 +61,18 @@
                 //TODO not sure of wasm needs to use this memory, prolly with import... And Besides WebAssembly.Memory we have WebAssembly.Table. Maybe a extra type for the heap? structs/arrays?
                 // exports then hmmmmmmmmmmmmmmmmmmmmmmmmmm
 
-                let access = obj.instance.exports.accessing(1);
-                let ans = JSON.stringify(obj.instance.exports.lol());
+                let ans = obj.instance.exports.lol();
+                let access = obj.instance.exports.accessing(ans,2);
+
+                // let ans = obj.instance.exports.lol(new ArrayBuffer(12));
                 // console.log(memory.buffer);
                 // let x = new Uint32Array(memory.buffer).filter(x => x!==0) //Empty!
                 // console.log(x);
                 // console.log(obj);
-                console.log(ans); //An object with no properties... So hmmmmmmmmmmmmm. Now undefined...
+                console.log(ans); //An object with no properties... So hmmmmmmmmmmmmm. In firefox an empty WasmArrayObject, but I see no way to access it
+                // console.log(ans.numElements_); //undefined.
                 document.getElementById("array_index").textContent = access;
-                document.getElementById("array").textContent = ans;
+                document.getElementById("array").textContent = JSON.stringify(ans);
             },
         );
     </script>
