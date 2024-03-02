@@ -62,12 +62,12 @@
                 // exports then hmmmmmmmmmmmmmmmmmmmmmmmmmm
 
                 let access = obj.instance.exports.accessing(1);
-                let ans = obj.instance.exports.lol();
+                let ans = JSON.stringify(obj.instance.exports.lol());
                 // console.log(memory.buffer);
                 // let x = new Uint32Array(memory.buffer).filter(x => x!==0) //Empty!
                 // console.log(x);
                 // console.log(obj);
-                console.log(ans); //An object with no properties... So hmmmmmmmmmmmmm
+                console.log(ans); //An object with no properties... So hmmmmmmmmmmmmm. Now undefined...
                 document.getElementById("array_index").textContent = access;
                 document.getElementById("array").textContent = ans;
             },
