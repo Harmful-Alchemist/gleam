@@ -4,7 +4,6 @@ use im::HashMap;
 use std::cell::RefCell;
 use std::{fmt::Debug, sync::Arc};
 use std::borrow::Borrow;
-use rand::distributions::uniform::SampleBorrow;
 
 use crate::ast::{Assignment, CallArg, CustomType, Definition, Function, Pattern, Statement, TypedExpr};
 use crate::type_::{ModuleInterface, Type};
