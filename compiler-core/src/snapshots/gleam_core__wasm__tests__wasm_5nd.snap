@@ -3,15 +3,16 @@ source: compiler-core/src/wasm.rs
 expression: wat
 ---
 (module
-(type $Cat_struct (struct (field $name i32) (field $cuteness i32)))
-(func $Cat (param $name i32) (param $cuteness i32) (result (ref $Cat_struct))
+(type $Cat_struct (struct (field $name (ref i31)) (field $cuteness (ref i31))))
+(func $Cat (param $name (ref i31)) (param $cuteness (ref i31)) (result (ref $Cat_struct))
     (local.get $name)
     (local.get $cuteness)
     (struct.new $Cat_struct))
-(func $add (export "add") (param $x i32) (param $y i32) (result i32)
+(func $add (export "add") (param $x (ref i31)) (param $y (ref i31)) (result (ref i31))
     (local $cat1 (ref $Cat_struct))
     (call $Cat (local.get $x) (local.get $y))
     (local.set $cat1)
-    (i32.add (local.get $cat1) (struct.get $Cat_struct $cuteness) (local.get $cat1) (struct.get $Cat_struct $name)))
+    (i32.add (local.get $cat1) (struct.get $Cat_struct $cuteness) (i31.get_s) (local.get $cat1) (struct.get $Cat_struct $name) (i31.get_s))
+    (ref.i31))
 (@producers (language "Gleam" "1.0.0-rc2"))
 )

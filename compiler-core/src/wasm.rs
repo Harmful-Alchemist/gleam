@@ -78,7 +78,7 @@ impl Wasmable for WasmStructDef {
 impl Wasmable for WasmType {
     fn to_wat(&self) -> EcoString {
         match self {
-            WasmType::I32 => "i32".into(),
+            WasmType::I32 => "(ref i31)".into(), //TODO rename to int?
             WasmType::ConcreteRef(x) => {
                 format!("(ref ${})", x.name).into()
             }
@@ -135,11 +135,13 @@ enum WasmInstruction {
     LocalSet(WasmVar),
     Call { func: WasmVar, args: Vec<WasmInstruction> },
     Function(WasmFunction),
-    I32Add(Vec<WasmInstruction>),
+    I32Add(Vec<WasmInstruction>), //TODO maybe rhs & lhs? 2 vecs... Easier wat to read: () ()
     I32Sub(Vec<WasmInstruction>),
     I32Const(i32),
     StructNew(WasmVar),
     StructGet(WasmVar, WasmVar),
+    RefI31,
+    I31GetS,
 }
 
 impl Wasmable for WasmInstruction {
@@ -153,9 +155,11 @@ impl Wasmable for WasmInstruction {
             WasmInstruction::Function(x) => { x.to_wat() }
             WasmInstruction::I32Add(xs) => { format!("i32.add{}", xs.to_wat()).into() }
             WasmInstruction::I32Sub(xs) => { format!("i32.sub{}", xs.to_wat()).into() }
-            WasmInstruction::I32Const(x) => { format!("i32.const {x}").into() }
+            WasmInstruction::I32Const(x) => { format!("i32.const {x}) (ref.i31").into() } //TODO ugh ugly brackets...
             WasmInstruction::StructNew(x) => { format!("struct.new ${}", x.name).into() }
             WasmInstruction::StructGet(struc, field) => { format!("struct.get ${} ${}", struc.name, field.name).into() }
+            WasmInstruction::RefI31 => {"ref.i31".into()}
+            WasmInstruction::I31GetS => {"i31.get_s".into()}
         }
     }
 }
@@ -389,15 +393,18 @@ impl WasmThing {
                 let mut op_instrs = Vec::new();
                 let mut ls = self.transform_gleam_expression(left.as_ref(), scope);
                 op_instrs.append(&mut ls.0);
+                op_instrs.push(WasmInstruction::I31GetS);
                 locals.append(&mut ls.1);
                 let mut rs = self.transform_gleam_expression(right.as_ref(), scope);
                 op_instrs.append(&mut rs.0);
+                op_instrs.push(WasmInstruction::I31GetS);
                 let op = match name {
                     BinOp::AddInt => WasmInstruction::I32Add(op_instrs),
                     BinOp::SubInt => WasmInstruction::I32Sub(op_instrs),
                     _ => todo!()
                 };
                 instructions.push(op);
+                instructions.push(WasmInstruction::RefI31);
                 locals.append(&mut rs.1);
             }
             TypedExpr::Var { name, .. } => {
