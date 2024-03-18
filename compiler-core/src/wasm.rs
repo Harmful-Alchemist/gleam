@@ -4,6 +4,7 @@ use im::HashMap;
 use std::cell::RefCell;
 use std::{fmt::Debug, sync::Arc};
 use std::borrow::Borrow;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::ast::{Assignment, CallArg, CustomType, Definition, Function, Pattern, Statement, TypedExpr};
 use crate::type_::{ModuleInterface, Type};
@@ -66,11 +67,11 @@ struct WasmStructDef {
 
 impl Wasmable for WasmStructDef {
     fn to_wat(&self) -> EcoString {
-        let mut acc = format!("(type ${} (struct", self.info.name);
+        let mut acc = format!("(type ${} (sub $heap_type (struct (field $tag i64)", self.info.name);
         self.fields.iter().for_each(|f|
             acc.push_str(&mut format!(" (field ${} {})", f.0.name, f.1.to_wat()))
         );
-        acc.push_str("))");
+        acc.push_str(")))");
         acc.into()
     }
 }
@@ -135,9 +136,10 @@ enum WasmInstruction {
     LocalSet(WasmVar),
     Call { func: WasmVar, args: Vec<WasmInstruction> },
     Function(WasmFunction),
-    I32Add(Vec<WasmInstruction>), //TODO maybe rhs & lhs? 2 vecs... Easier wat to read: () ()
-    I32Sub(Vec<WasmInstruction>),
-    I32Const(i32),
+    I32AddI31s(Vec<WasmInstruction>), //TODO maybe rhs & lhs? 2 vecs... Easier wat to read: () ()
+    I32SubI31s(Vec<WasmInstruction>),
+    I31Const(i32),
+    I64Const(i64),
     StructNew(WasmVar),
     StructGet(WasmVar, WasmVar),
     RefI31,
@@ -153,13 +155,14 @@ impl Wasmable for WasmInstruction {
                 format!("call ${}{}", func.name, args.to_wat()).into()
             }
             WasmInstruction::Function(x) => { x.to_wat() }
-            WasmInstruction::I32Add(xs) => { format!("i32.add{}", xs.to_wat()).into() }
-            WasmInstruction::I32Sub(xs) => { format!("i32.sub{}", xs.to_wat()).into() }
-            WasmInstruction::I32Const(x) => { format!("i32.const {x}) (ref.i31").into() } //TODO ugh ugly brackets...
+            WasmInstruction::I32AddI31s(xs) => { format!("i32.add{}", xs.to_wat()).into() }
+            WasmInstruction::I32SubI31s(xs) => { format!("i32.sub{}", xs.to_wat()).into() }
+            WasmInstruction::I31Const(x) => { format!("i32.const {x}) (ref.i31").into() } //TODO ugh ugly brackets...
             WasmInstruction::StructNew(x) => { format!("struct.new ${}", x.name).into() }
             WasmInstruction::StructGet(struc, field) => { format!("struct.get ${} ${}", struc.name, field.name).into() }
             WasmInstruction::RefI31 => {"ref.i31".into()}
             WasmInstruction::I31GetS => {"i31.get_s".into()}
+            WasmInstruction::I64Const(x) => {format!("i64.const {x}").into()}
         }
     }
 }
@@ -260,7 +263,7 @@ impl WasmThing {
         let _ = self.functions_type_section_index.borrow_mut().insert(constructor_name.clone(), (constructor_idx as u32, fun_len as u32)); //TODO get or insert? Maybe used already? Then need place holder in two places :P
 
         let var = WasmVar {
-            name: constructor_name,
+            name: constructor_name.clone(),
         };
 
         let constructor_def = WasmFuncDef {
@@ -273,6 +276,11 @@ impl WasmThing {
         self.type_section.borrow_mut().push(WasmTypeSectionEntry::Function(constructor_def.clone()));
 
         let mut instructions = Vec::new();
+        let mut s = DefaultHasher::new();
+        constructor_name.hash(&mut s);
+        let  eh = s.finish();
+        instructions.push(WasmInstruction::I64Const(eh as i64)); //Set the type tag based on struct variant name. TODO i64 might be a bit much.
+
         for (v, _) in fields.iter() {
             instructions.push(WasmInstruction::LocalGet(v.clone()));
         }
@@ -399,8 +407,8 @@ impl WasmThing {
                 op_instrs.append(&mut rs.0);
                 op_instrs.push(WasmInstruction::I31GetS);
                 let op = match name {
-                    BinOp::AddInt => WasmInstruction::I32Add(op_instrs),
-                    BinOp::SubInt => WasmInstruction::I32Sub(op_instrs),
+                    BinOp::AddInt => WasmInstruction::I32AddI31s(op_instrs),
+                    BinOp::SubInt => WasmInstruction::I32SubI31s(op_instrs),
                     _ => todo!()
                 };
                 instructions.push(op);
@@ -412,7 +420,7 @@ impl WasmThing {
             }
             TypedExpr::Int { value, .. } => {
                 //TODO type?
-                return (vec![WasmInstruction::I32Const(value.parse().unwrap())], vec![]);
+                return (vec![WasmInstruction::I31Const(value.parse().unwrap())], vec![]);
             }
             TypedExpr::Call { fun, args, .. } => {
                 let mut instrs = Vec::with_capacity(args.len() + 1);
@@ -546,6 +554,9 @@ impl WasmThing {
 
 impl Wasmable for WasmThing {
     fn to_wat(&self) -> EcoString {
+
+        let prelude = "(type $heap_type (sub (struct (field $tag i64))))\n";
+
         let types = self.type_section.borrow().iter()
             .map(|x| x.to_wat())
             .reduce(|mut acc, x| {
@@ -565,6 +576,7 @@ impl Wasmable for WasmThing {
             }).unwrap_or_default();
 
         let mut module = EcoString::from("(module\n");
+        module.push_str(prelude);
         module.push_str(&types);
         if types != "" {
             module.push_str("\n");

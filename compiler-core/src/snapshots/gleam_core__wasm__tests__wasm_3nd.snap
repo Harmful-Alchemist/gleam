@@ -3,6 +3,7 @@ source: compiler-core/src/wasm.rs
 expression: wat
 ---
 (module
+(type $heap_type (sub (struct (field $tag i64))))
 (func $add (export "add") (param $x (ref i31)) (param $y (ref i31)) (result (ref i31))
     (local $z (ref i31))
     (local $a (ref i31))

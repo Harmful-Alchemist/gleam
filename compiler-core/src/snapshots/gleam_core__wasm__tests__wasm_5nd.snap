@@ -3,8 +3,10 @@ source: compiler-core/src/wasm.rs
 expression: wat
 ---
 (module
-(type $Cat_struct (struct (field $name (ref i31)) (field $cuteness (ref i31))))
+(type $heap_type (sub (struct (field $tag i64))))
+(type $Cat_struct (sub $heap_type (struct (field $tag i64) (field $name (ref i31)) (field $cuteness (ref i31)))))
 (func $Cat (param $name (ref i31)) (param $cuteness (ref i31)) (result (ref $Cat_struct))
+    (i64.const -615244078225387894)
     (local.get $name)
     (local.get $cuteness)
     (struct.new $Cat_struct))

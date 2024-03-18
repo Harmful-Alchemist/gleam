@@ -1,7 +1,3 @@
----
-source: compiler-core/src/wasm.rs
-expression: wat
----
 (module
 (type $heap_type (sub (struct (field $tag i64))))
 (type $Cat_struct (sub $heap_type (struct (field $tag i64) (field $name (ref i31)) (field $cuteness (ref i31)))))
