@@ -16,5 +16,5 @@ expression: wat
     (local.set $cat1)
     (i32.add (local.get $cat1) (struct.get $Cat_struct $cuteness) (i31.get_s) (local.get $cat1) (struct.get $Cat_struct $name) (i31.get_s))
     (ref.i31))
-(@producers (language "Gleam" "1.0.0-rc2"))
+(@producers (language "Gleam" "1.0.0"))
 )

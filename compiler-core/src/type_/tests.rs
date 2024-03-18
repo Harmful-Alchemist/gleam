@@ -4,7 +4,7 @@ use crate::{
     ast::{TypedModule, TypedStatement, UntypedExpr, UntypedModule},
     build::{Origin, Target},
     error::Error,
-    type_::{build_prelude, pretty::Printer},
+    type_::{build_prelude, expression::Externals, pretty::Printer},
     uid::UniqueIdGenerator,
     warning::{TypeWarningEmitter, VectorWarningEmitterIO, WarningEmitter, WarningEmitterIO},
 };
@@ -21,13 +21,13 @@ mod conditional_compilation;
 mod custom_types;
 mod errors;
 mod exhaustiveness;
-mod expression;
 mod externals;
 mod functions;
 mod guards;
 mod imports;
 mod pipes;
 mod pretty;
+mod target_implementations;
 mod type_alias;
 mod use_;
 mod warnings;
@@ -82,7 +82,7 @@ macro_rules! assert_js_module_infer {
         let constructors = $crate::type_::tests::infer_module_with_target(
             $src,
             vec![],
-            crate::build::Target::JavaScript,
+            $crate::build::Target::JavaScript,
         );
         let expected = $crate::type_::tests::stringify_tuple_strs($module);
         assert_eq!(($src, constructors), ($src, expected));
@@ -103,7 +103,7 @@ macro_rules! assert_js_module_error {
         let output = $crate::type_::tests::module_error_with_target(
             $src,
             vec![],
-            crate::build::Target::JavaScript,
+            $crate::build::Target::JavaScript,
         );
         insta::assert_snapshot!(insta::internals::AutoName, output, $src);
     };
@@ -267,11 +267,10 @@ fn compile_statement_sequence(src: &str) -> Result<Vec1<TypedStatement>, crate::
             &TypeWarningEmitter::null(),
             TargetSupport::Enforced,
         ),
-        Implementations {
-            gleam: false,
-            uses_erlang_externals: false,
-            uses_javascript_externals: false,
-            uses_wasm_externals: false,
+        Externals {
+            erlang: false,
+            javascript: false,
+            wasm: false,
         },
     )
     .infer_statements(ast)
@@ -307,8 +306,8 @@ pub fn infer_module_with_target(
     dep: Vec<DependencyModule<'_>>,
     target: Target,
 ) -> Vec<(EcoString, String)> {
-    let ast =
-        compile_module_with_target(src, None, dep, target).expect("should successfully infer");
+    let ast = compile_module_with_target(src, None, dep, target, TargetSupport::NotEnforced)
+        .expect("should successfully infer");
     ast.type_info
         .values
         .iter()
@@ -326,7 +325,13 @@ pub fn compile_module(
     warnings: Option<Arc<dyn WarningEmitterIO>>,
     dep: Vec<DependencyModule<'_>>,
 ) -> Result<TypedModule, crate::type_::Error> {
-    compile_module_with_target(src, warnings, dep, Target::Erlang)
+    compile_module_with_target(
+        src,
+        warnings,
+        dep,
+        Target::Erlang,
+        TargetSupport::NotEnforced,
+    )
 }
 
 pub fn compile_module_with_target(
@@ -334,6 +339,7 @@ pub fn compile_module_with_target(
     warnings: Option<Arc<dyn WarningEmitterIO>>,
     dep: Vec<DependencyModule<'_>>,
     target: Target,
+    target_support: TargetSupport,
 ) -> Result<TypedModule, crate::type_::Error> {
     let ids = UniqueIdGenerator::new();
     let mut modules = im::HashMap::new();
@@ -365,7 +371,7 @@ pub fn compile_module_with_target(
             &modules,
             &warnings,
             &std::collections::HashMap::from_iter(vec![]),
-            TargetSupport::NotEnforced,
+            target_support,
         )
         .expect("should successfully infer");
         let _ = modules.insert(name.into(), module.type_info);
@@ -399,8 +405,8 @@ pub fn module_error_with_target(
     deps: Vec<DependencyModule<'_>>,
     target: Target,
 ) -> String {
-    let error =
-        compile_module_with_target(src, None, deps, target).expect_err("should infer an error");
+    let error = compile_module_with_target(src, None, deps, target, TargetSupport::NotEnforced)
+        .expect_err("should infer an error");
     let error = Error::Type {
         src: src.into(),
         path: Utf8PathBuf::from("/src/one/two.gleam"),

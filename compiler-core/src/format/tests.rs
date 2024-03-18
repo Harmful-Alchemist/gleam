@@ -4,6 +4,7 @@ mod asignments;
 mod binary_operators;
 mod bit_array;
 mod blocks;
+mod cases;
 mod conditional_compilation;
 mod external_fn;
 mod external_types;
@@ -40,7 +41,7 @@ fn imports() {
     assert_format!("import one\n");
     assert_format!("import one\nimport two\n");
     assert_format!("import one/two/three\n");
-    assert_format!("import one/two/three\nimport four/five\n");
+    assert_format!("import four/five\nimport one/two/three\n");
     assert_format!("import one.{fun, fun2, fun3}\n");
     assert_format!("import one.{One, Two, fun1, fun2}\n");
     assert_format!("import one.{main as entrypoint}\n");
@@ -67,8 +68,8 @@ fn imports() {
 fn multiple_statements_test() {
     assert_format!(
         r#"import one
-import two
 import three
+import two
 
 pub type One
 
@@ -5544,6 +5545,79 @@ fn pipeline_inside_tuple_is_not_nested_if_only_item() {
     a_variable_with_a_long_name
     |> another_variable_with_a_long_name
     |> yet_another_variable_with_a_long_name,
+  )
+}
+"#
+    );
+}
+
+// github.com/gleam-lang/gleam/issues/2608
+#[test]
+fn comments_are_not_moved_out_of_list_of_literals() {
+    assert_format!(
+        r#"fn main() {
+  [
+    1, 2,
+    // list
+  ]
+}
+"#
+    );
+}
+
+// github.com/gleam-lang/gleam/issues/2608
+#[test]
+fn comments_are_not_moved_out_of_list() {
+    assert_format!(
+        r#"fn main() {
+  [
+    wibble,
+    wobble,
+    // list
+  ]
+}
+"#
+    );
+}
+
+// github.com/gleam-lang/gleam/issues/2608
+#[test]
+fn comments_are_not_moved_out_of_case_expressions() {
+    assert_format!(
+        r#"fn main() {
+  case True {
+    _ -> Nil
+    // case
+  }
+}
+"#
+    );
+}
+
+// github.com/gleam-lang/gleam/issues/2608
+#[test]
+fn comments_are_not_moved_out_of_tuples() {
+    assert_format!(
+        r#"fn main() {
+  #(
+    1,
+    2,
+    // tuple
+  )
+}
+"#
+    );
+}
+
+// github.com/gleam-lang/gleam/issues/2608
+#[test]
+fn comments_are_not_moved_out_of_function_calls() {
+    assert_format!(
+        r#"fn main() {
+  call(
+    1,
+    2,
+    // function call
   )
 }
 "#

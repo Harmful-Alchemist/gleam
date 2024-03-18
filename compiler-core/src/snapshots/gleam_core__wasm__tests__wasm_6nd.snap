@@ -30,5 +30,5 @@ expression: wat
     (call $grow (local.get $kitten))
     (local.set $cat)
     (call $add_cat (local.get $cat)))
-(@producers (language "Gleam" "1.0.0-rc2"))
+(@producers (language "Gleam" "1.0.0"))
 )

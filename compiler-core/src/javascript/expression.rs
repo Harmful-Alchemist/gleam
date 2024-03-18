@@ -141,16 +141,17 @@ impl<'module> Generator<'module> {
             TypedExpr::Int { value, .. } => Ok(int(value)),
             TypedExpr::Float { value, .. } => Ok(float(value)),
 
-            TypedExpr::List { elements, tail, .. } => {
-                self.tracker.list_used = true;
-                self.not_in_tail_position(|gen| {
-                    let tail = match tail {
-                        Some(tail) => Some(gen.wrap_expression(tail)?),
-                        None => None,
-                    };
-                    list(elements.iter().map(|e| gen.wrap_expression(e)), tail)
-                })
-            }
+            TypedExpr::List { elements, tail, .. } => self.not_in_tail_position(|gen| match tail {
+                Some(tail) => {
+                    gen.tracker.prepend_used = true;
+                    let tail = gen.wrap_expression(tail)?;
+                    prepend(elements.iter().map(|e| gen.wrap_expression(e)), tail)
+                }
+                None => {
+                    gen.tracker.list_used = true;
+                    list(elements.iter().map(|e| gen.wrap_expression(e)))
+                }
+            }),
 
             TypedExpr::Tuple { elems, .. } => self.tuple(elems),
             TypedExpr::TupleIndex { tuple, index, .. } => self.tuple_index(tuple, *index),
@@ -264,7 +265,7 @@ impl<'module> Generator<'module> {
         Ok(docvec!["toBitArray(", segments_array, ")"])
     }
 
-    pub fn wrap_return<'a>(&self, document: Document<'a>) -> Document<'a> {
+    pub fn wrap_return<'a>(&mut self, document: Document<'a>) -> Document<'a> {
         if self.scope_position.is_tail() {
             docvec!["return ", document, ";"]
         } else {
@@ -342,7 +343,8 @@ impl<'module> Generator<'module> {
         self.scope_position = scope_position;
 
         // Wrap in iife document
-        Ok(self.immediately_involked_function_expression_document(result?))
+        let doc = self.immediately_involked_function_expression_document(result?);
+        Ok(self.wrap_return(doc))
     }
 
     /// Wrap a document in an immediately involked function expression
@@ -1100,10 +1102,15 @@ impl<'module> Generator<'module> {
             break_(" ||", " || ")
         };
 
+        let checks_len = checks.len();
         concat(Itertools::intersperse(
-            checks
-                .into_iter()
-                .map(|check| check.into_doc(match_desired)),
+            checks.into_iter().map(|check| {
+                if checks_len > 1 && check.may_require_wrapping() {
+                    docvec!["(", check.into_doc(match_desired), ")"]
+                } else {
+                    check.into_doc(match_desired)
+                }
+            }),
             operator,
         ))
         .group()
@@ -1179,7 +1186,6 @@ pub(crate) fn guard_constant_expression<'a>(
                 elements
                     .iter()
                     .map(|e| guard_constant_expression(assignments, tracker, e)),
-                None,
             )
         }
         Constant::Record { typ, name, .. } if typ.is_bool() && name == "True" => {
@@ -1234,10 +1240,7 @@ pub(crate) fn constant_expression<'a>(
 
         Constant::List { elements, .. } => {
             tracker.list_used = true;
-            list(
-                elements.iter().map(|e| constant_expression(tracker, e)),
-                None,
-            )
+            list(elements.iter().map(|e| constant_expression(tracker, e)))
         }
 
         Constant::Record { typ, name, .. } if typ.is_bool() && name == "True" => {
@@ -1354,20 +1357,22 @@ pub fn array<'a, Elements: IntoIterator<Item = Output<'a>>>(elements: Elements) 
     .group())
 }
 
-fn list<'a, I: IntoIterator<Item = Output<'a>>>(
-    elements: I,
-    tail: Option<Document<'a>>,
-) -> Output<'a>
+fn list<'a, I: IntoIterator<Item = Output<'a>>>(elements: I) -> Output<'a>
 where
     I::IntoIter: DoubleEndedIterator + ExactSizeIterator,
 {
     let array = array(elements);
-    if let Some(tail) = tail {
-        let args = [array, Ok(tail)];
-        Ok(docvec!["toList", call_arguments(args)?])
-    } else {
-        Ok(docvec!["toList(", array?, ")"])
-    }
+    Ok(docvec!["toList(", array?, ")"])
+}
+
+fn prepend<'a, I: IntoIterator<Item = Output<'a>>>(elements: I, tail: Document<'a>) -> Output<'a>
+where
+    I::IntoIter: DoubleEndedIterator + ExactSizeIterator,
+{
+    elements.into_iter().rev().try_fold(tail, |tail, element| {
+        let args = call_arguments([element, Ok(tail)])?;
+        Ok(docvec!["$prepend", args])
+    })
 }
 
 fn call_arguments<'a, Elements: IntoIterator<Item = Output<'a>>>(elements: Elements) -> Output<'a> {

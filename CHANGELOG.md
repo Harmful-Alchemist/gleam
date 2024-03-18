@@ -1,5 +1,69 @@
 # Changelog
 
+## Unreleased
+
+### Compiler
+
+- Prepending to lists in JavaScript (`[x, ..xs]` syntax) has been optimised.
+- Function stubs are no longer generated for functions that do not have an
+  implementation for the current targeting being compiled for.
+- Fixed a bug where some functions would not result in a compile error when
+  compiled for a target that they do not support.
+- Fixed a bug where sometimes a warning would not be emitted when a result is
+  discarded.
+- Fixed a bug with JavaScript code generation of pattern matching guards.
+- URLs in error messages have been updated for the new language tour.
+- Improved error message when erroneously trying to append items to a list using
+  the spread syntax (like `[..rest, last]`).
+- Generate [type references](https://www.typescriptlang.org/docs/handbook/triple-slash-directives.html#-reference-types-)
+  when compiling to JavaScript with TypeScript definitions enabled.
+- Fix a bug where JavaScript code generation would not properly return the result of nested blocks.
+
+
+### Formatter
+
+- The formatting of case expressions with multiple subjects has been improved.
+- Fixed a bug where the formatter would move comments from the end of bounded
+  expressions like lists, tuples, case expressions or function calls.
+- Fixed a bug where a record update's arguments would not be indented correctly.
+
+### Build tool
+
+- A warning is now emitted if there is a `.gleam` file with a path that would be
+  invalid as a module name.
+- New projects are created with the GitHub `actions/checkout` v4 action.
+- Fixed a bug where bit arrays would break syntax highlighting in the generated
+  HTML documentation.
+- Dependencies that use Erlang-only bit options can now compile on JavaScript,
+  though the functions that use them will not be available for use in the root
+  package.
+- Generated documentation no longer exposes the constructors of opaque types,
+  no longer exposes the values of constants, and indicates which types are
+  opaque.
+
+### Language Server
+
+- The `Compiling Gleam` message is no longer emitted each time code is compiled.
+  This is to reduce noise in editors that show this message prominently such as
+  Neovim.
+- Fixed a bug where hovering over an expression in the middle of a pipe would
+  give the wrong node.
+
+
+## v1.0.0 - 2024-03-04
+
+### Language changes
+
+- Comments have been added to the JavaScript prelude to indicate which members
+  are in the public API and which are internal.
+
+### Build tool
+
+- Fixed a bug where the exported package interface would not have a module's
+  documentation.
+- Fixed a bug where the `export package interface` command would always
+  recompile the project ignoring the cache.
+
 ## v1.0.0-rc2 - 2024-02-14
 
 ### Bug fixes
@@ -10,6 +74,9 @@
 ### Formatter
 
 - The format used by the formatter has been improved in some niche cases.
+- Improved the formatting of long case guards.
+- The formatter can now format groups of imports alphabetically.
+
 
 ## v1.0.0-rc1 - 2024-02-10
 

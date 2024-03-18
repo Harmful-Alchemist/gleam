@@ -13,5 +13,5 @@ expression: wat
     (local.set $a)
     (i32.add (i32.add (i32.add (local.get $x) (i31.get_s) (local.get $y) (i31.get_s)) (ref.i31) (i31.get_s) (local.get $z) (i31.get_s)) (ref.i31) (i31.get_s) (local.get $a) (i31.get_s))
     (ref.i31))
-(@producers (language "Gleam" "1.0.0-rc2"))
+(@producers (language "Gleam" "1.0.0"))
 )

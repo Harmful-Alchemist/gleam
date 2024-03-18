@@ -300,7 +300,7 @@ impl Error {
                 version,
                 source,
             } => format!(
-                "An error occured while trying to retrieve dependencies of {package}@{version}: {source}",
+                "An error occurred while trying to retrieve dependencies of {package}@{version}: {source}",
             ),
 
             ResolutionError::DependencyOnTheEmptySet {
@@ -2022,7 +2022,7 @@ allowed at the end of a bin pattern.")],
                             vec!["Hint: If you specify unit() you must also specify size().".into()],
                         ),
                     };
-                    extra.push("See: https://gleam.run/book/tour/bit-arrays.html".into());
+                    extra.push("See: https://tour.gleam.run/data-types/bit-arrays/".into());
                     let text = extra.join("\n");
                     Diagnostic {
                         title: "Invalid bit array segment".into(),
@@ -2339,7 +2339,7 @@ The missing patterns are:\n"
                 TypeError::InexhaustiveCaseExpression { location, missing } => {
                     let mut text: String =
                         "This case expression does not have a pattern for all possible values.
-If is run on one of the values without a pattern then it will crash.
+If it is run on one of the values without a pattern then it will crash.
 
 The missing patterns are:\n"
                             .into();
@@ -2370,17 +2370,18 @@ The missing patterns are:\n"
                 } => {
                     let text = wrap_format!(
                         "This value is not available as it is defined using externals, \
-and there is no implementation for the {} target.",
+and there is no implementation for the {} target.\n",
                         match current_target {
                             Target::Erlang => "Erlang",
                             Target::JavaScript => "JavaScript",
                             Target::Wasm => "Web assembly"
                         }
                     );
+                    let hint = wrap("Did you mean to build for a different target?");
                     Diagnostic {
                         title: "Unsupported target".into(),
                         text,
-                        hint: None,
+                        hint: Some(hint),
                         level: Level::Error,
                         location: Some(Location {
                             path: path.clone(),

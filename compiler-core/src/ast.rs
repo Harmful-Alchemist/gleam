@@ -1337,6 +1337,13 @@ impl TypedPattern {
             return None;
         }
 
+        if let Pattern::Variable { name, .. } = self {
+            // For pipes the pattern can't be pointed to
+            if name.as_str().eq(PIPE_VARIABLE) {
+                return None;
+            }
+        }
+
         match self {
             Pattern::Int { .. }
             | Pattern::Float { .. }
