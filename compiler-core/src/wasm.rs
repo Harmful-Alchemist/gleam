@@ -599,6 +599,8 @@ mod tests {
     use std::sync::Arc;
     use ecow::EcoString;
     use im::HashMap;
+    // use wasmtime::{Config, Engine, Linker, Module, Store};
+    // use wasmtime::component::__internal::wasmtime_environ::component::Export::Instance;
     use crate::analyse::TargetSupport;
     use crate::ast::{Definition, TypedExpr};
     use crate::type_::{ModuleInterface, Type};
@@ -664,7 +666,37 @@ mod tests {
 
         let mut file = File::create("letstry.wasm").unwrap();
         let _ = file.write_all(&wasm);
+
+        // TODO such a shame, not implemented for GC stuff (the structs at least). It would have been so nice. But keep an eye out. Not seeing a quick turn-around: https://github.com/bytecodealliance/wasmtime/issues/5032
+        // Other rust runtimes wasmer(https://github.com/wasmerio/wasmer/issues/357), wasm3(https://github.com/wasm3/wasm3/issues/432) & wasmedge(https://github.com/WasmEdge/WasmEdge/issues/1122 tho lets try that one 0.14.0rc, but ugh look at the requirements: https://wasmedge.org/docs/embed/rust/intro/) don't seem to support (fully) yet.
+        // Would be nice to then fuzz it.
+        // Non-rust option is V8, some headless chrome crate maybe? Chrome runs the stuff.
+
+        // let mut config = Config::default();
+        // let _ = config.wasm_gc(true);
+        // let _ = config.wasm_function_references(true);
+        // // let _ = config.wasm_reference_types(true);
+        // // let _ = config.wasm_bulk_memory(true);
+        // let engine = Engine::new(&config).unwrap();
+        //
+        // let module = Module::new(&engine, wat.as_bytes()).unwrap();
+        //
+        // let mut linker = Linker::new(&engine);
+        //
+        // let mut store = Store::new(&engine, 120);
+        // let instance = linker.instantiate(&mut store, &module).unwrap();
+        // let add = instance.get_typed_func::<(i32, i32), (i32)>(&mut store, "add").unwrap();
+        //
+        // let res = add.call(&mut store, (1,2)).unwrap();
+        // assert_eq!(res,3);
+
+        //TODO turn back on the headless chrome in cargo toml, make the basic webserver: https://doc.rust-lang.org/book/ch20-01-single-threaded.html EZPZ? (2 endpoints some html and the letstry.wasm) Then execute and check the answer?
+        // using the quick start here: https://github.com/rust-headless-chrome/rust-headless-chrome
+        // ????????
+
         insta::assert_snapshot!(wat);
+
+
     }
 
     #[test]
