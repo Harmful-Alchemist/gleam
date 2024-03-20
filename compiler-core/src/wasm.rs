@@ -136,7 +136,8 @@ enum WasmInstruction {
     LocalSet(WasmVar),
     Call { func: WasmVar, args: Vec<WasmInstruction> },
     Function(WasmFunction),
-    I32AddI31s(Vec<WasmInstruction>), //TODO maybe rhs & lhs? 2 vecs... Easier wat to read: () ()
+    I32AddI31s(Vec<WasmInstruction>),
+    //TODO maybe rhs & lhs? 2 vecs... Easier wat to read: () ()
     I32SubI31s(Vec<WasmInstruction>),
     I31Const(i32),
     I64Const(i64),
@@ -160,9 +161,9 @@ impl Wasmable for WasmInstruction {
             WasmInstruction::I31Const(x) => { format!("i32.const {x}) (ref.i31").into() } //TODO ugh ugly brackets...
             WasmInstruction::StructNew(x) => { format!("struct.new ${}", x.name).into() }
             WasmInstruction::StructGet(struc, field) => { format!("struct.get ${} ${}", struc.name, field.name).into() }
-            WasmInstruction::RefI31 => {"ref.i31".into()}
-            WasmInstruction::I31GetS => {"i31.get_s".into()}
-            WasmInstruction::I64Const(x) => {format!("i64.const {x}").into()}
+            WasmInstruction::RefI31 => { "ref.i31".into() }
+            WasmInstruction::I31GetS => { "i31.get_s".into() }
+            WasmInstruction::I64Const(x) => { format!("i64.const {x}").into() }
         }
     }
 }
@@ -278,7 +279,7 @@ impl WasmThing {
         let mut instructions = Vec::new();
         let mut s = DefaultHasher::new();
         constructor_name.hash(&mut s);
-        let  eh = s.finish();
+        let eh = s.finish();
         instructions.push(WasmInstruction::I64Const(eh as i64)); //Set the type tag based on struct variant name. TODO i64 might be a bit much.
 
         for (v, _) in fields.iter() {
@@ -554,7 +555,6 @@ impl WasmThing {
 
 impl Wasmable for WasmThing {
     fn to_wat(&self) -> EcoString {
-
         let prelude = "(type $heap_type (sub (struct (field $tag i64))))\n";
 
         let types = self.type_section.borrow().iter()
@@ -595,10 +595,15 @@ impl Wasmable for WasmThing {
 mod tests {
     use std::cell::RefCell;
     use std::fs::File;
-    use std::io::Write;
-    use std::sync::Arc;
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
+    use std::sync::{Arc, Mutex};
+    use std::{fs, thread};
     use ecow::EcoString;
+    use headless_chrome::Browser;
     use im::HashMap;
+    use serde_json::{Number, Value};
+    use lazy_static::lazy_static;
     // use wasmtime::{Config, Engine, Linker, Module, Store};
     // use wasmtime::component::__internal::wasmtime_environ::component::Export::Instance;
     use crate::analyse::TargetSupport;
@@ -606,6 +611,8 @@ mod tests {
     use crate::type_::{ModuleInterface, Type};
     use crate::warning::{TypeWarningEmitter, WarningEmitter};
     use crate::wasm::{Wasmable, WasmThing};
+
+    lazy_static! { static ref PORT_AND_FILE_RESOURCE: Mutex<()> = Mutex::default(); } //TODO remove but eh
 
     fn trying_to_make_module(
         program: &str,
@@ -644,6 +651,7 @@ mod tests {
 
     #[test]
     fn wasm_2n() {
+        let _shared = PORT_AND_FILE_RESOURCE.lock().unwrap();
         let gleam_module = trying_to_make_module(
             "pub fn add(x: Int, y: Int) -> Int {
             x + y
@@ -690,17 +698,94 @@ mod tests {
         // let res = add.call(&mut store, (1,2)).unwrap();
         // assert_eq!(res,3);
 
-        //TODO turn back on the headless chrome in cargo toml, make the basic webserver: https://doc.rust-lang.org/book/ch20-01-single-threaded.html EZPZ? (2 endpoints some html and the letstry.wasm) Then execute and check the answer?
+        //... TODO turn back on the headless chrome in cargo toml, make the basic webserver: https://doc.rust-lang.org/book/ch20-01-single-threaded.html EZPZ? (2 endpoints some html and the letstry.wasm) Then execute and check the answer?
         // using the quick start here: https://github.com/rust-headless-chrome/rust-headless-chrome
         // ????????
 
+        assert_eq!(exported_add(1, 2), 3);
+
         insta::assert_snapshot!(wat);
+    }
 
+    fn exported_add(x: i32, y: i32) -> i64 {
+        launch_server();
 
+        let browser = Browser::default().unwrap();
+
+        let tab = browser.new_tab().unwrap();
+
+        let _ = tab.navigate_to("http://localhost:7878/").unwrap();
+        let body = tab.wait_for_element("body").unwrap();
+
+        let remote_obj = body.call_js_fn(r#"
+            async function aName(x,y) {
+            let ans = "have to wait for wasm";
+            await WebAssembly.instantiateStreaming(fetch("/letstry.wasm")).then(
+                (obj) => {
+                    ans =  obj.instance.exports.add(x,y);
+                },
+            ).catch((reason) => {ans = reason});
+            return ans;
+            }"#, vec![Value::Number(Number::from(x)), Value::Number(Number::from(y))], true).unwrap();
+
+        dbg!(&remote_obj);
+
+        let remote_obj = remote_obj.value.unwrap();
+
+        dbg!(&remote_obj);
+        match remote_obj {
+            Value::Number(z) => { return z.as_i64().unwrap(); }
+            _ => panic!()
+        }
+    }
+
+    fn launch_server() {
+        let _ = thread::spawn(move || {
+            let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+
+            for stream in listener.incoming() {
+                let mut stream = stream.unwrap();
+                let buf_reader = BufReader::new(&mut stream);
+                let request_line = buf_reader.lines().next().unwrap().unwrap();
+                dbg!(&request_line);
+                let status_line = "HTTP/1.1 200 OK";
+                if request_line == "GET /letstry.wasm HTTP/1.1" {
+                    let mut contents = fs::read("letstry.wasm").unwrap();
+                    let length = contents.len();
+                    dbg!("wasm reg");
+
+                    let response = format!(
+                        "{status_line}\r\nContent-Length: {length}\r\nContent-Type: application/wasm\r\n\r\n"
+                    );
+                    let mut bytes = response.as_bytes().to_vec();
+                    bytes.append(&mut contents);
+
+                    stream.write_all(&bytes).unwrap();
+                } else {
+                    dbg!("html req");
+                    let contents = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Test wasm</title>
+ </head>
+ <body></body>
+  </html>"#.to_string();
+                    let length = contents.len();
+
+                    let response = format!(
+                        "{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}"
+                    );
+
+                    stream.write_all(response.as_bytes()).unwrap();
+                }
+            }
+        });
     }
 
     #[test]
     fn wasm_3nd() {
+        let _shared = PORT_AND_FILE_RESOURCE.lock().unwrap();
         let gleam_module = trying_to_make_module(
             "pub fn add(x: Int, y: Int) -> Int {
             let z = 10
@@ -726,11 +811,14 @@ mod tests {
         let mut file = File::create("letstry.wasm").unwrap();
         let _ = file.write_all(&wasm);
 
+        assert_eq!(exported_add(1, 2), 113);
+
         insta::assert_snapshot!(wat);
     }
 
     #[test]
     fn wasm_4nd() {
+        let _shared = PORT_AND_FILE_RESOURCE.lock().unwrap();
         let gleam_module = trying_to_make_module(
             "
         pub fn add(x: Int, y: Int) -> Int {
@@ -759,12 +847,14 @@ mod tests {
         let mut file = File::create("letstry.wasm").unwrap();
         let _ = file.write_all(&wasm);
 
+        assert_eq!(exported_add(1, 2), 4);
         insta::assert_snapshot!(wat);
     }
 
     #[test]
     fn wasm_5nd() {
 //TODO pub types!
+        let _shared = PORT_AND_FILE_RESOURCE.lock().unwrap();
         let gleam_module = trying_to_make_module(
             "
          type Cat {
@@ -793,11 +883,13 @@ mod tests {
         let mut file = File::create("letstry.wasm").unwrap();
         let _ = file.write_all(&wasm);
 
+        assert_eq!(exported_add(1, 2), 3);
         insta::assert_snapshot!(wat);
     }
 
     #[test]
     fn wasm_6nd() {
+        let _shared = PORT_AND_FILE_RESOURCE.lock().unwrap();
 //TODO pub types!
         let gleam_module = trying_to_make_module(
             "
@@ -840,6 +932,7 @@ type Kitten {Kitten(name: Int, age: Int, cuteness: Int) }
         let mut file = File::create("letstry.wasm").unwrap();
         let _ = file.write_all(&wasm);
 
+        assert_eq!(exported_add(1, 2), 2);
         insta::assert_snapshot!(wat);
     }
 

@@ -85,6 +85,7 @@ pathdiff = { version = "0.2.1", features = ["camino"] }
 id-arena = "2.1"
 # Parse wat to wasm
 wat = "1.201.0"
+lazy_static = "1.4.0"
 
 [build-dependencies]
 # Data (de)serialisation
@@ -101,4 +102,4 @@ insta = "1.8.0"
 rand = "0.8.5"
 # wasm runtime for testing generated wasm
 #wasmtime = { git = "https://github.com/bytecodealliance/wasmtime.git", features = ["gc"] } #Next version will have GC but not yet in 18 (not finished on main). Required a higher version of wat crate
-#headless_chrome = {version = "1.0.9", features = ["fetch"]}
+headless_chrome = {version = "1.0.9", features = ["fetch"]}
