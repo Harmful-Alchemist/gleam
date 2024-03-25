@@ -3,7 +3,13 @@ source: compiler-core/src/wasm.rs
 expression: wat
 ---
 (module
+
 (type $heap_type (sub (struct (field $tag i64))))
+(rec
+  (type $list (sub $heap_type (struct (field $tag i64))))
+  (type $cons (sub final $list (struct (field $tag i64) (field $value (ref $heap_type)) (field $prev (ref $list)))))
+  (type $empty (sub final $list (struct (field $tag i64))))
+)
 (type $Cat_struct (sub $heap_type (struct (field $tag i64) (field $name (ref i31)) (field $cuteness (ref i31)))))
 (type $Kitten_struct (sub $heap_type (struct (field $tag i64) (field $name (ref i31)) (field $age (ref i31)) (field $cuteness (ref i31)))))
 (func $Cat (param $name (ref i31)) (param $cuteness (ref i31)) (result (ref $Cat_struct))

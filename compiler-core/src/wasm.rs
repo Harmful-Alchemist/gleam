@@ -1,4 +1,4 @@
-use crate::ast::BinOp;
+use crate::ast::{BinOp, Clause};
 use ecow::EcoString;
 use im::HashMap;
 use std::cell::RefCell;
@@ -7,7 +7,9 @@ use std::borrow::Borrow;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::ast::{Assignment, CallArg, CustomType, Definition, Function, Pattern, Statement, TypedExpr};
-use crate::type_::{ModuleInterface, Type};
+use crate::ast::TypeAst::Var;
+use crate::type_::{ModuleInterface, Type, TypeVar};
+use crate::wasm::WasmInstruction::{Block, BranchCastTwo};
 
 pub trait Wasmable {
     fn to_wat(&self) -> EcoString;
@@ -145,6 +147,8 @@ enum WasmInstruction {
     StructGet(WasmVar, WasmVar),
     RefI31,
     I31GetS,
+    Block { inner: Vec<WasmInstruction>, after: Vec<WasmInstruction>, name: WasmVar },
+    BranchCastTwo { local_: WasmVar, type_: WasmType, block_matching_type: WasmVar }, //TODO generalize? Kinda specific this way.
 }
 
 impl Wasmable for WasmInstruction {
@@ -164,6 +168,10 @@ impl Wasmable for WasmInstruction {
             WasmInstruction::RefI31 => { "ref.i31".into() }
             WasmInstruction::I31GetS => { "i31.get_s".into() }
             WasmInstruction::I64Const(x) => { format!("i64.const {x}").into() }
+            WasmInstruction::Block { inner, after, name } => { format!("block {} (\n{}\n) ;;end block {}\n{}\nreturn", name.to_wat(), inner.to_wat(), name.to_wat(), after.to_wat()).into() }
+            WasmInstruction::BranchCastTwo { local_, type_, block_matching_type } => {
+                format!("br_on_cast {} (ref $heap_type) {} (local.get {})", block_matching_type.to_wat(), type_.to_wat(), local_.name).into() //TODO check order and remove, expecting outer block to be used here.
+            }
         }
     }
 }
@@ -315,17 +323,17 @@ impl WasmThing {
         let result_type = self.transform_gleam_type(gleam_function.return_type.as_ref());
         let mut arguments = Vec::new();
         let mut locals = Vec::new();
-        let mut scope: HashMap<EcoString, usize> = HashMap::new();
+        // let mut scope: HashMap<EcoString, usize> = HashMap::new();
         for param in &gleam_function.arguments {
             let name = param.names.get_variable_name().unwrap(); //TODO unwrap???
-            let _ = scope.insert(name.clone(), scope.len());
+            // let _ = scope.insert(name.clone(), scope.len());
             let type_ = self.transform_gleam_type(param.type_.as_ref());
             arguments.push((WasmVar { name: name.clone() }, type_));
         }
 
         let mut instructions = Vec::new();
         for gleam_statement in gleam_function.body.iter() {
-            let (mut instrs, mut lcls) = self.transform_gleam_statement(gleam_statement, &mut scope);
+            let (mut instrs, mut lcls) = self.transform_gleam_statement(gleam_statement);
             instructions.append(&mut instrs);
             locals.append(&mut lcls);
         }
@@ -358,28 +366,28 @@ impl WasmThing {
     fn transform_gleam_statement(
         &self,
         gleam_statement: &Statement<Arc<Type>, TypedExpr>,
-        scope: &mut HashMap<EcoString, usize>,
+        // scope: &mut HashMap<EcoString, usize>,
     ) -> (Vec<WasmInstruction>, Vec<(WasmVar, WasmType)>) {
         match gleam_statement {
             Statement::Expression(gleam_expression) => {
-                self.transform_gleam_expression(gleam_expression, scope)
+                self.transform_gleam_expression(gleam_expression)
             }
             Statement::Assignment(gleam_assignment) => {
-                self.transform_gleam_assignment(gleam_assignment, scope)
+                self.transform_gleam_assignment(gleam_assignment)
             }
             _ => todo!(),
         }
     }
 
-    fn transform_gleam_assignment(&self, gleam_assignment: &Assignment<Arc<Type>, TypedExpr>, scope: &mut HashMap<EcoString, usize>) -> (Vec<WasmInstruction>, Vec<(WasmVar, WasmType)>) {
+    fn transform_gleam_assignment(&self, gleam_assignment: &Assignment<Arc<Type>, TypedExpr>) -> (Vec<WasmInstruction>, Vec<(WasmVar, WasmType)>) {
         match &gleam_assignment.pattern {
             Pattern::Variable { name, type_, .. } => {
-                let _ = scope.insert(name.clone(), scope.len());
+                // let _ = scope.insert(name.clone(), scope.len());
                 let locals = vec![(
                     WasmVar { name: name.clone() }, self.transform_gleam_type(type_),
                 )];
                 let mut instrs = Vec::new();
-                let mut val = self.transform_gleam_expression(gleam_assignment.value.as_ref(), scope);
+                let mut val = self.transform_gleam_expression(gleam_assignment.value.as_ref());
                 instrs.append(&mut val.0);
                 instrs.push(WasmInstruction::LocalSet(locals[0].0.clone()));
                 (instrs, locals)
@@ -391,7 +399,7 @@ impl WasmThing {
     fn transform_gleam_expression(
         &self,
         gleam_expression: &TypedExpr,
-        scope: &mut HashMap<EcoString, usize>,
+        // scope: &mut HashMap<EcoString, usize>,
     ) -> (Vec<WasmInstruction>, Vec<(WasmVar, WasmType)>) {
         let mut instructions = Vec::new();
         let mut locals = Vec::new();
@@ -400,11 +408,11 @@ impl WasmThing {
                 name, left, right, ..
             } => {
                 let mut op_instrs = Vec::new();
-                let mut ls = self.transform_gleam_expression(left.as_ref(), scope);
+                let mut ls = self.transform_gleam_expression(left.as_ref());
                 op_instrs.append(&mut ls.0);
                 op_instrs.push(WasmInstruction::I31GetS);
                 locals.append(&mut ls.1);
-                let mut rs = self.transform_gleam_expression(right.as_ref(), scope);
+                let mut rs = self.transform_gleam_expression(right.as_ref());
                 op_instrs.append(&mut rs.0);
                 op_instrs.push(WasmInstruction::I31GetS);
                 let op = match name {
@@ -427,7 +435,7 @@ impl WasmThing {
                 let mut instrs = Vec::with_capacity(args.len() + 1);
                 let mut locals = Vec::new();
                 for CallArg { value, .. } in args {
-                    let (mut is, mut ls) = self.transform_gleam_expression(value, scope);
+                    let (mut is, mut ls) = self.transform_gleam_expression(value);
                     instrs.append(&mut is);
                     locals.append(&mut ls);
                 }
@@ -505,6 +513,101 @@ impl WasmThing {
                 // TODO implement cons list! With uniform representation
                 todo!()
             }
+            TypedExpr::Case { subjects, clauses, .. } => {
+                //typ is what we want on the stack after this. Prolly a block or series...
+                // dbg!(typ);
+
+                // dbg!(subjects);
+                // dbg!(clauses);
+
+                if clauses.len() != 2 || subjects.len() != 1 {
+                    todo!()
+                }
+
+                let subj = &subjects[0];
+
+                let subj = if let TypedExpr::Var { name, .. } = subj {
+                    name
+                } else {
+                    todo!()
+                };
+
+
+                let mut blocks: Vec<WasmInstruction> = Vec::with_capacity(1);
+                let mut last = false; //TODO ugh
+                for clause in clauses {
+                    if !clause.alternative_patterns.is_empty() {
+                        todo!()
+                    }
+
+                    if let [Pattern::List { location, elements, tail, type_ }] = &clause.pattern[..] {
+                        let mut after = Vec::new();
+                        let is_empty_match = elements.is_empty() && tail.is_none(); //TODO not exhaustive I'd guess.
+
+                        if is_empty_match {
+                            let x = self.transform_gleam_expression(&clause.then);
+                            after = x.0;
+                        } else {
+                            //Take assignments of tail and head (for now what if we match like: [x,y,..z] not yet!TODO)
+                            if elements.len() != 1 || tail.is_none() {
+                                todo!();
+                            }
+
+                            for element in elements {
+                                if let Pattern::Variable {name, type_, .. } = element {
+                                    asasdasfsg
+                                } else {
+                                    todo!()
+                                }
+                            }
+
+
+                            dbg!(clause);
+                            todo!();
+                            after.append(&mut self.transform_gleam_expression(&clause.then).0);
+                        }
+
+
+                        if last {
+                            let mut block = &mut blocks[0];
+                            if let Block { inner, .. } = block {
+                                *inner = vec![Block {
+                                    inner: vec![BranchCastTwo {
+                                        local_: WasmVar { name: subj.clone() },
+                                        type_: WasmType::ConcreteRef(WasmVar { name: if is_empty_match { "cons".into() } else { "empty".into() } }),
+                                        block_matching_type: WasmVar { name: "first_block".into() },
+                                    }],
+                                    after,
+                                    name: WasmVar { name: "last_block".into() },
+                                }];
+                            }
+                            // blocks.push(
+                            //     Block {
+                            //         inner: vec![BranchCastTwo {
+                            //             local_: WasmVar { name: subj.clone() },
+                            //             type_: WasmType::ConcreteRef(WasmVar { name: if is_empty_match {"cons".into()} else {"empty".into()} }),
+                            //             block_matching_type: WasmVar { name: "first_block".into() },
+                            //         }],
+                            //         after,
+                            //         name: WasmVar { name: "last_block".into() },
+                            //     }
+                            // );
+                        } else {
+                            blocks.push(
+                                Block {
+                                    inner: vec![],
+                                    after,
+                                    name: WasmVar { name: "first_block".into() },
+                                }
+                            );
+                        }
+                    } else {
+                        todo!()
+                    }
+                    last = true;
+                }
+                return (blocks, locals);
+            }
             x => {
                 dbg!(x);
                 todo!()
@@ -513,49 +616,73 @@ impl WasmThing {
         (instructions, locals)
     }
 
+    fn type_name_to_wasm_type(&self, name: &str) -> WasmType {
+        match name {
+            "Int" => WasmType::I32,
+            x => {
+                let mut x = x.to_string();
+                x.push_str("_struct");
+                let x = &x;
+
+                let len = self.type_section.borrow().len();
+                let idx = self.type_section.borrow().iter().enumerate()
+                    .filter_map(|(i, entry)| {
+                        if let WasmTypeSectionEntry::Struct(WasmStructDef { info, .. }) = entry {
+                            if info.name == x.as_str() {
+                                return Some(i);
+                            }
+                        }
+                        return None;
+                    }
+                    )
+                    .nth(0).unwrap_or(len); //TODO map so easier, maybe :P
+
+                if idx == len {
+                    self.type_section.borrow_mut().push(WasmTypeSectionEntry::PlaceHolder(EcoString::from(x.clone())));
+                }
+
+                let x = EcoString::from(x.clone());
+
+                WasmType::ConcreteRef(
+                    WasmVar {
+                        name: x,
+                    })
+            }
+        }
+    }
+
     fn transform_gleam_type(&self, type_: &Type) -> WasmType {
         match type_ {
-            Type::Named { name, .. } =>
-                match name.as_str() {
-                    "Int" => WasmType::I32,
-                    x => {
-                        let mut x = x.to_string();
-                        x.push_str("_struct");
-                        let x = &x;
-
-                        let len = self.type_section.borrow().len();
-                        let idx = self.type_section.borrow().iter().enumerate()
-                            .filter_map(|(i, entry)| {
-                                if let WasmTypeSectionEntry::Struct(WasmStructDef { info, .. }) = entry {
-                                    if info.name == x.as_str() {
-                                        return Some(i);
-                                    }
-                                }
-                                return None;
-                            }
-                            )
-                            .nth(0).unwrap_or(len); //TODO map so easier, maybe :P
-
-                        if idx == len {
-                            self.type_section.borrow_mut().push(WasmTypeSectionEntry::PlaceHolder(EcoString::from(x.clone())));
-                        }
-
-                        let x = EcoString::from(x.clone());
-
-                        WasmType::ConcreteRef(
-                            WasmVar {
-                                name: x,
-                            })
+            Type::Named { name, .. } => self.type_name_to_wasm_type(name.as_str()),
+            Type::Var { type_ } => {
+                let type_: &RefCell<TypeVar> = type_.as_ref();
+                let type_ = &*type_.borrow();
+                match type_ {
+                    TypeVar::Link { type_ } => {
+                        self.transform_gleam_type(type_.borrow())
                     }
+                    TypeVar::Unbound { .. } => { todo!() }
+                    TypeVar::Generic { .. } => { todo!() }
                 }
-            _ => todo!() //Prolly a ref, with correct index?,
+            }
+            x => {
+                dbg!(x);
+                todo!()
+            } //Prolly a ref, with correct index?,
         }
     }
 }
 
 impl Wasmable for WasmThing {
     fn to_wat(&self) -> EcoString {
-        let prelude = "(type $heap_type (sub (struct (field $tag i64))))\n";
+        let prelude = r#"
+(type $heap_type (sub (struct (field $tag i64))))
+(rec
+  (type $list (sub $heap_type (struct (field $tag i64))))
+  (type $cons (sub final $list (struct (field $tag i64) (field $value (ref $heap_type)) (field $prev (ref $list)))))
+  (type $empty (sub final $list (struct (field $tag i64))))
+)
+"#;
 
         let types = self.type_section.borrow().iter()
             .map(|x| x.to_wat())
@@ -936,34 +1063,42 @@ type Kitten {Kitten(name: Int, age: Int, cuteness: Int) }
         insta::assert_snapshot!(wat);
     }
 
-//     #[test]
-//     fn wasm_7nd() {
-// //TODO pub types!
-//         let gleam_module = trying_to_make_module(
-//             "
-//         pub fn a_list() -> List(Int) {
-//             [1,2,3]
-//           }",
-//         );
-//
-//
-//         let w = WasmThing {
-//             gleam_module,
-//             wasm_instructions: RefCell::new(vec![]),
-//             type_section: RefCell::new(vec![]),
-//             functions_type_section_index: RefCell::new(Default::default()),
-//         };
-//         w.transform();
-//
-//         let wat = w.to_wat();
-//         let mut file = File::create("letstry.wat").unwrap();
-//         let _ = file.write_all(wat.as_bytes());
-//
-//         let wasm = wat::parse_str(wat.clone()).unwrap();
-//
-//         let mut file = File::create("letstry.wasm").unwrap();
-//         let _ = file.write_all(&wasm);
-//
-//         insta::assert_snapshot!(wat);
-//     }
+    #[test]
+    fn wasm_7nd() {
+        let gleam_module = trying_to_make_module(
+            "
+        pub fn add(x: Int,y: Int) -> Int {
+            let z = [x,y,3]
+            sum(z)
+          }
+
+        fn sum(list: List(Int)) -> Int {
+            case list {
+                [] -> 0
+                [h,..t] -> h + sum(t)
+            }
+        }",
+        );
+
+
+        let w = WasmThing {
+            gleam_module,
+            wasm_instructions: RefCell::new(vec![]),
+            type_section: RefCell::new(vec![]),
+            functions_type_section_index: RefCell::new(Default::default()),
+        };
+        w.transform();
+
+        let wat = w.to_wat();
+        let mut file = File::create("letstry.wat").unwrap();
+        let _ = file.write_all(wat.as_bytes());
+
+        let wasm = wat::parse_str(wat.clone()).unwrap();
+
+        let mut file = File::create("letstry.wasm").unwrap();
+        let _ = file.write_all(&wasm);
+
+        assert_eq!(exported_add(1, 2), 6);
+        insta::assert_snapshot!(wat);
+    }
 }
