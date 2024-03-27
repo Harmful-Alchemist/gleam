@@ -1,4 +1,4 @@
-use crate::ast::{BinOp, Clause};
+use crate::ast::{BinOp};
 use ecow::EcoString;
 use im::HashMap;
 use std::cell::RefCell;
@@ -7,9 +7,9 @@ use std::borrow::Borrow;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::ast::{Assignment, CallArg, CustomType, Definition, Function, Pattern, Statement, TypedExpr};
-use crate::ast::TypeAst::Var;
 use crate::type_::{ModuleInterface, Type, TypeVar};
-use crate::wasm::WasmInstruction::{Block, BranchCastTwo};
+use crate::wasm::WasmInstruction::{Block, BranchCastTwo, I64Const, RefCast, StructNew};
+use crate::wasm::WasmType::ConcreteRef;
 
 pub trait Wasmable {
     fn to_wat(&self) -> EcoString;
@@ -148,7 +148,9 @@ enum WasmInstruction {
     RefI31,
     I31GetS,
     Block { inner: Vec<WasmInstruction>, after: Vec<WasmInstruction>, name: WasmVar },
-    BranchCastTwo { local_: WasmVar, type_: WasmType, block_matching_type: WasmVar }, //TODO generalize? Kinda specific this way.
+    BranchCastTwo { local_: WasmVar, type_: WasmType, block_matching_type: WasmVar },
+    //TODO generalize? Kinda specific this way.
+    RefCast(WasmVar),
 }
 
 impl Wasmable for WasmInstruction {
@@ -168,10 +170,11 @@ impl Wasmable for WasmInstruction {
             WasmInstruction::RefI31 => { "ref.i31".into() }
             WasmInstruction::I31GetS => { "i31.get_s".into() }
             WasmInstruction::I64Const(x) => { format!("i64.const {x}").into() }
-            WasmInstruction::Block { inner, after, name } => { format!("block {} (\n{}\n) ;;end block {}\n{}\nreturn", name.to_wat(), inner.to_wat(), name.to_wat(), after.to_wat()).into() }
+            WasmInstruction::Block { inner, after, name } => { format!("(block {} \n{} ) ;;end block {}\n{}\nreturn", name.to_wat(), inner.to_wat(), name.to_wat(), after.to_wat()).into() }
             WasmInstruction::BranchCastTwo { local_, type_, block_matching_type } => {
-                format!("br_on_cast {} (ref $heap_type) {} (local.get {})", block_matching_type.to_wat(), type_.to_wat(), local_.name).into() //TODO check order and remove, expecting outer block to be used here.
+                format!("br_on_cast {} (ref $heap_type) {} (local.get {})", block_matching_type.to_wat(), type_.to_wat(), local_.to_wat()).into() //TODO check order and remove, expecting outer block to be used here.
             }
+            WasmInstruction::RefCast(x) => { format!("ref.cast {}", ConcreteRef(x.clone()).to_wat()).into() }
         }
     }
 }
@@ -509,9 +512,37 @@ impl WasmThing {
 
                 return (instrs, locals);
             }
-            TypedExpr::List { .. } => {
-                // TODO implement cons list! With uniform representation
-                todo!()
+            TypedExpr::List { location, typ, elements, tail } => {
+                if tail.is_some() {
+                    todo!()
+                }
+
+                let mut s = DefaultHasher::new(); //TODO struct member?
+                "empty".hash(&mut s);
+                let tag = s.finish();
+                instructions.push(I64Const(tag as i64)); //Set the type tag based on struct variant name.
+                instructions.push(StructNew(WasmVar { name: "empty".into() }));
+                instructions.push(RefCast(WasmVar { name: "list".into() }));
+                // if elements.is_empty() {
+                // return (vec![StructNew(WasmVar{name: "empty".into()})],locals)
+                // }
+
+                for element in elements {
+                    //prev is on stack
+
+                    // put value on stack
+                    instructions.append(&mut self.transform_gleam_expression(element).0);
+
+                    // put tag on stack
+                    "cons".hash(&mut s);
+                    let tag = s.finish();
+                    instructions.push(I64Const(tag as i64));
+
+                    instructions.push(StructNew(WasmVar { name: "cons".into() }));
+                    instructions.push(RefCast(WasmVar { name: "list".into() }));
+                }
+
+                return (instructions, locals);
             }
             TypedExpr::Case { subjects, clauses, .. } => {
                 //typ is what we want on the stack after this. Prolly a block or series...
@@ -554,16 +585,27 @@ impl WasmThing {
                             }
 
                             for element in elements {
-                                if let Pattern::Variable {name, type_, .. } = element {
-                                    asasdasfsg
+                                if let Pattern::Variable { name, .. } = element {
+                                    after.push(WasmInstruction::StructGet(WasmVar { name: subj.clone() }, WasmVar { name: "value".into() }));
+                                    after.push(WasmInstruction::LocalSet(WasmVar { name: name.clone() }))
                                 } else {
                                     todo!()
                                 }
                             }
 
 
-                            dbg!(clause);
-                            todo!();
+                            match tail {
+                                Some(x) => match x.as_ref() {
+                                    Pattern::Variable { name, .. } => {
+                                        after.push(WasmInstruction::StructGet(WasmVar { name: subj.clone() }, WasmVar { name: "value".into() }));
+                                        after.push(WasmInstruction::LocalSet(WasmVar { name: name.clone() }))
+                                    }
+                                    _ => todo!()
+                                },
+                                _ => todo!()
+                            }
+                            // dbg!(clause);
+                            // todo!();
                             after.append(&mut self.transform_gleam_expression(&clause.then).0);
                         }
 
@@ -619,6 +661,7 @@ impl WasmThing {
     fn type_name_to_wasm_type(&self, name: &str) -> WasmType {
         match name {
             "Int" => WasmType::I32,
+            "List" => ConcreteRef(WasmVar { name: "list".into() }),
             x => {
                 let mut x = x.to_string();
                 x.push_str("_struct");
@@ -638,6 +681,7 @@ impl WasmThing {
                     .nth(0).unwrap_or(len); //TODO map so easier, maybe :P
 
                 if idx == len {
+                    dbg!(x);
                     self.type_section.borrow_mut().push(WasmTypeSectionEntry::PlaceHolder(EcoString::from(x.clone())));
                 }
 
@@ -1072,8 +1116,8 @@ type Kitten {Kitten(name: Int, age: Int, cuteness: Int) }
             sum(z)
           }
 
-        fn sum(list: List(Int)) -> Int {
-            case list {
+        fn sum(listy: List(Int)) -> Int {
+            case listy {
                 [] -> 0
                 [h,..t] -> h + sum(t)
             }
