@@ -7,8 +7,9 @@ use std::borrow::Borrow;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::ast::{Assignment, CallArg, CustomType, Definition, Function, Pattern, Statement, TypedExpr};
+use crate::manifest::ManifestPackageSource::Local;
 use crate::type_::{ModuleInterface, Type, TypeVar};
-use crate::wasm::WasmInstruction::{Block, BranchCastTwo, I64Const, RefCast, StructNew};
+use crate::wasm::WasmInstruction::{Block, BranchCastTwo, I64Const, LocalGet, LocalSet, RefCast, StructNew};
 use crate::wasm::WasmType::ConcreteRef;
 
 pub trait Wasmable {
@@ -19,7 +20,7 @@ pub trait Wasmable {
 enum WasmType {
     I32,
     ConcreteRef(WasmVar),
-
+    EqRef,
 }
 
 #[derive(Debug)]
@@ -84,7 +85,8 @@ impl Wasmable for WasmType {
             WasmType::I32 => "(ref i31)".into(), //TODO rename to int?
             WasmType::ConcreteRef(x) => {
                 format!("(ref ${})", x.name).into()
-            }
+            },
+            WasmType::EqRef => "(ref eq)".into()
         }
     }
 }
@@ -123,7 +125,7 @@ impl Wasmable for WasmFunction {
                 acc
             },
         );
-        let body = self.body.iter().map(|x| format!("\n    ({})", x.to_wat())).fold(EcoString::new(), |mut acc, x| {
+        let body = self.body.iter().map(|x| format!("\n    {}", x.to_wat())).fold(EcoString::new(), |mut acc, x| {
             acc.push_str(&x);
             acc
         });
@@ -148,40 +150,42 @@ enum WasmInstruction {
     RefI31,
     I31GetS,
     Block { inner: Vec<WasmInstruction>, after: Vec<WasmInstruction>, name: WasmVar },
-    BranchCastTwo { local_: WasmVar, type_: WasmType, block_matching_type: WasmVar },
+    BranchCastTwo { local_: WasmVar, type_: WasmType, block_matching_type: WasmVar, block_matching_type_idx: u32 }, //TODO src and dest type?
     //TODO generalize? Kinda specific this way.
     RefCast(WasmVar),
+    Local(WasmVar, WasmType),
 }
 
 impl Wasmable for WasmInstruction {
     fn to_wat(&self) -> EcoString {
         match self {
-            WasmInstruction::LocalGet(x) => { format!("local.get ${}", x.name).into() }
-            WasmInstruction::LocalSet(x) => { format!("local.set ${}", x.name).into() }
+            WasmInstruction::LocalGet(x) => { format!("(local.get ${})", x.name).into() }
+            WasmInstruction::LocalSet(x) => { format!("(local.set ${})", x.name).into() }
             WasmInstruction::Call { func, args } => {
-                format!("call ${}{}", func.name, args.to_wat()).into()
+                format!("(call ${}{})", func.name, args.to_wat()).into()
             }
             WasmInstruction::Function(x) => { x.to_wat() }
-            WasmInstruction::I32AddI31s(xs) => { format!("i32.add{}", xs.to_wat()).into() }
-            WasmInstruction::I32SubI31s(xs) => { format!("i32.sub{}", xs.to_wat()).into() }
-            WasmInstruction::I31Const(x) => { format!("i32.const {x}) (ref.i31").into() } //TODO ugh ugly brackets...
-            WasmInstruction::StructNew(x) => { format!("struct.new ${}", x.name).into() }
-            WasmInstruction::StructGet(struc, field) => { format!("struct.get ${} ${}", struc.name, field.name).into() }
-            WasmInstruction::RefI31 => { "ref.i31".into() }
-            WasmInstruction::I31GetS => { "i31.get_s".into() }
-            WasmInstruction::I64Const(x) => { format!("i64.const {x}").into() }
+            WasmInstruction::I32AddI31s(xs) => { format!("(i32.add{})", xs.to_wat()).into() }
+            WasmInstruction::I32SubI31s(xs) => { format!("(i32.sub{})", xs.to_wat()).into() }
+            WasmInstruction::I31Const(x) => { format!("(i32.const {x}) (ref.i31)").into() } //TODO ugh ugly brackets...
+            WasmInstruction::StructNew(x) => { format!("(struct.new ${})", x.name).into() }
+            WasmInstruction::StructGet(struc, field) => { format!("(struct.get ${} ${})", struc.name, field.name).into() }
+            WasmInstruction::RefI31 => { "(ref.i31)".into() }
+            WasmInstruction::I31GetS => { "(i31.get_s)".into() }
+            WasmInstruction::I64Const(x) => { format!("(i64.const {x})").into() }
             WasmInstruction::Block { inner, after, name } => { format!("(block {} \n{} ) ;;end block {}\n{}\nreturn", name.to_wat(), inner.to_wat(), name.to_wat(), after.to_wat()).into() }
-            WasmInstruction::BranchCastTwo { local_, type_, block_matching_type } => {
-                format!("br_on_cast {} (ref $heap_type) {} (local.get {})", block_matching_type.to_wat(), type_.to_wat(), local_.to_wat()).into() //TODO check order and remove, expecting outer block to be used here.
+            WasmInstruction::BranchCastTwo { local_, type_, block_matching_type, block_matching_type_idx } => {
+                format!("(local.get {}) (br_on_cast {block_matching_type_idx} (;{};) (ref $list) {})", local_.to_wat(), block_matching_type.to_wat(), type_.to_wat()).into() //TODO check order and remove, expecting outer block to be used here.
             }
             WasmInstruction::RefCast(x) => { format!("ref.cast {}", ConcreteRef(x.clone()).to_wat()).into() }
+            WasmInstruction::Local(name, type_) => { format!("(local {} {})", name.to_wat(), type_.to_wat()).into() }
         }
     }
 }
 
 impl Wasmable for Vec<WasmInstruction> {
     fn to_wat(&self) -> EcoString {
-        self.iter().map(|x| format!(" ({})", x.to_wat())).reduce(|mut acc, x| {
+        self.iter().map(|x| format!(" {}", x.to_wat())).reduce(|mut acc, x| {
             acc.push_str(&x);
             acc
         }).unwrap_or(String::from("")).into()
@@ -575,6 +579,9 @@ impl WasmThing {
                         let mut after = Vec::new();
                         let is_empty_match = elements.is_empty() && tail.is_none(); //TODO not exhaustive I'd guess.
 
+
+                        //TODO try if on tag instead of branch?
+
                         if is_empty_match {
                             let x = self.transform_gleam_expression(&clause.then);
                             after = x.0;
@@ -586,8 +593,12 @@ impl WasmThing {
 
                             for element in elements {
                                 if let Pattern::Variable { name, .. } = element {
-                                    after.push(WasmInstruction::StructGet(WasmVar { name: subj.clone() }, WasmVar { name: "value".into() }));
-                                    after.push(WasmInstruction::LocalSet(WasmVar { name: name.clone() }))
+                                    after.push(LocalGet(WasmVar { name: subj.clone() }));
+                                    after.push(RefCast(WasmVar { name: "cons".into() })); //since we know if not empty is a cons
+                                    after.push(WasmInstruction::StructGet(WasmVar { name: "cons".into() }, WasmVar { name: "value".into() }));
+                                    // after.push(WasmInstruction::Local(WasmVar { name: name.clone() }, WasmType::ConcreteRef(WasmVar { name: "heap_type".into() })));
+                                    locals.push((WasmVar { name: name.clone() }, WasmType::EqRef)); //TODO modify name based on block!
+                                    after.push(WasmInstruction::LocalSet(WasmVar { name: name.clone() }));
                                 } else {
                                     todo!()
                                 }
@@ -597,7 +608,10 @@ impl WasmThing {
                             match tail {
                                 Some(x) => match x.as_ref() {
                                     Pattern::Variable { name, .. } => {
-                                        after.push(WasmInstruction::StructGet(WasmVar { name: subj.clone() }, WasmVar { name: "value".into() }));
+                                        after.push(LocalGet(WasmVar { name: subj.clone() }));
+                                        after.push(WasmInstruction::StructGet(WasmVar { name: "cons".into() }, WasmVar { name: "prev".into() }));
+                                        // after.push(WasmInstruction::Local(WasmVar { name: name.clone() }, WasmType::ConcreteRef(WasmVar { name: "list".into() })));
+                                        locals.push((WasmVar { name: name.clone() }, WasmType::ConcreteRef(WasmVar { name: "list".into() }))); //TODO modify name based on block!
                                         after.push(WasmInstruction::LocalSet(WasmVar { name: name.clone() }))
                                     }
                                     _ => todo!()
@@ -618,6 +632,7 @@ impl WasmThing {
                                         local_: WasmVar { name: subj.clone() },
                                         type_: WasmType::ConcreteRef(WasmVar { name: if is_empty_match { "cons".into() } else { "empty".into() } }),
                                         block_matching_type: WasmVar { name: "first_block".into() },
+                                        block_matching_type_idx: (elements.len() +1) as u32
                                     }],
                                     after,
                                     name: WasmVar { name: "last_block".into() },
@@ -723,7 +738,7 @@ impl Wasmable for WasmThing {
 (type $heap_type (sub (struct (field $tag i64))))
 (rec
   (type $list (sub $heap_type (struct (field $tag i64))))
-  (type $cons (sub final $list (struct (field $tag i64) (field $value (ref $heap_type)) (field $prev (ref $list)))))
+  (type $cons (sub final $list (struct (field $tag i64) (field $value (ref eq)) (field $prev (ref $list)))))
   (type $empty (sub final $list (struct (field $tag i64))))
 )
 "#;
