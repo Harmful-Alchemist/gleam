@@ -7,7 +7,9 @@
   (type $empty (sub final $list (struct (field $tag i64))))
 )
 
-
+;; TODO check this: https://github.com/WebAssembly/gc/pull/359 & https://github.com/WebAssembly/binaryen/issues/6229, wait blocks have types?
+;; And there's something wiiild with it.... in letstry.wasm, type 4 or 5 works nothing else, I think these are function sig but can't refer to em by label....
+;; looks like the same for the block label maybe in the branch
 
 (func $sum (param $listy (ref $list)) (param $acc (ref i31)) (result (ref i31))
     (local $h (ref i31))

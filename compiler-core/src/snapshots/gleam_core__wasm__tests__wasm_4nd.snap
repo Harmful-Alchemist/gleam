@@ -7,7 +7,7 @@ expression: wat
 (type $heap_type (sub (struct (field $tag i64))))
 (rec
   (type $list (sub $heap_type (struct (field $tag i64))))
-  (type $cons (sub final $list (struct (field $tag i64) (field $value (ref $heap_type)) (field $prev (ref $list)))))
+  (type $cons (sub final $list (struct (field $tag i64) (field $value (ref eq)) (field $prev (ref $list)))))
   (type $empty (sub final $list (struct (field $tag i64))))
 )
 (func $internal_add (param $x (ref i31)) (param $y (ref i31)) (result (ref i31))
