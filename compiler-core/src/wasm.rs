@@ -8,7 +8,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::ast::{Assignment, CallArg, CustomType, Definition, Function, Pattern, Statement, TypedExpr};
 use crate::type_::{ModuleInterface, Type, TypeVar};
-use crate::wasm::WasmInstruction::{Block, BranchCastTwo, I64Const, LocalGet, RefCast, StructNew};
+use crate::wasm::WasmInstruction::{I64Const, IfReturn, LocalGet, RefCast, StructGet, StructNew};
 use crate::wasm::WasmType::ConcreteRef;
 
 pub trait Wasmable {
@@ -144,16 +144,20 @@ enum WasmInstruction {
     I32SubI31s(Vec<WasmInstruction>),
     I31Const(i32),
     I64Const(i64),
+    I64Eq(Vec<WasmInstruction>),
     StructNew { struct_: WasmVar, args: Vec<WasmInstruction> },
     StructGet(WasmVar, WasmVar),
     RefI31,
     I31GetS,
-    Block { inner: Vec<WasmInstruction>, after: Vec<WasmInstruction>, name: WasmVar },
-    BranchCastTwo { local_: WasmVar, type_: WasmType, block_matching_type: WasmVar, block_matching_type_idx: u32 },
+    // Block { inner: Vec<WasmInstruction>, after: Vec<WasmInstruction>, name: WasmVar },
+    IfReturn { condition: Vec<WasmInstruction>, if_branch: Vec<WasmInstruction> },
+    // IfElseReturn { condition: Vec<WasmInstruction>, if_branch: Vec<WasmInstruction>, else_branch: Vec<WasmInstruction> },
     //TODO src and dest type?
     //TODO generalize? Kinda specific this way.
     RefCast(WasmVar, Vec<WasmInstruction>),
+    Cast(WasmType),
     Local(WasmVar, WasmType),
+    Unreachable,
 }
 
 impl Wasmable for WasmInstruction {
@@ -173,12 +177,18 @@ impl Wasmable for WasmInstruction {
             WasmInstruction::RefI31 => { "(ref.i31)".into() }
             WasmInstruction::I31GetS => { "(i31.get_s)".into() }
             WasmInstruction::I64Const(x) => { format!("(i64.const {x})").into() }
-            WasmInstruction::Block { inner, after, name } => { format!("(block {} \n{} ) ;;end block {}\n{}\nreturn", name.to_wat(), inner.to_wat(), name.to_wat(), after.to_wat()).into() }
-            WasmInstruction::BranchCastTwo { local_, type_, block_matching_type, block_matching_type_idx } => {
-                format!("(local.get {}) (br_on_cast {block_matching_type_idx} (;{};) (ref $list) {})", local_.to_wat(), block_matching_type.to_wat(), type_.to_wat()).into() //TODO check order and remove, expecting outer block to be used here.
+            WasmInstruction::I64Eq(x) => { format!("(i64.eq {})", x.to_wat()).into() }
+            // WasmInstruction::Block { inner, after, name } => { format!("(block {} \n{} ) ;;end block {}\n{}\nreturn", name.to_wat(), inner.to_wat(), name.to_wat(), after.to_wat()).into() }
+            // WasmInstruction::IfElseReturn { condition, if_branch, else_branch } => {
+            //     format!("if ({}) (then {})\n(else {})",condition.to_wat(),if_branch.to_wat(),else_branch.to_wat()).into()
+            // }
+            WasmInstruction::IfReturn { condition, if_branch } => { //TODO think here could also end with a return_call instead of return instruction, that a next step?
+                format!("(if {} (then {}\nreturn)\n)", condition.to_wat(), if_branch.to_wat()).into()
             }
             WasmInstruction::RefCast(x, xs) => { format!("(ref.cast {} {})", ConcreteRef(x.clone()).to_wat(), xs.to_wat()).into() }
+            WasmInstruction::Cast(x) => { format!("(ref.cast {})", x.to_wat()).into() }
             WasmInstruction::Local(name, type_) => { format!("(local {} {})", name.to_wat(), type_.to_wat()).into() }
+            WasmInstruction::Unreachable => "unreachable".into()
         }
     }
 }
@@ -292,7 +302,7 @@ impl WasmThing {
         self.type_section.borrow_mut().push(WasmTypeSectionEntry::Function(constructor_def.clone()));
 
         let mut args_instructions = Vec::new();
-        let mut s = DefaultHasher::new();
+        let mut s = DefaultHasher::default();
         constructor_name.hash(&mut s);
         let eh = s.finish();
         args_instructions.push(WasmInstruction::I64Const(eh as i64)); //Set the type tag based on struct variant name. TODO i64 might be a bit much.
@@ -521,15 +531,13 @@ impl WasmThing {
                     todo!()
                 }
 
-                let mut s = DefaultHasher::new(); //TODO struct member?
+                let mut s = DefaultHasher::default();
                 "empty".hash(&mut s);
                 let tag = s.finish();
                 let mut list = RefCast(WasmVar { name: "list".into() }, vec![StructNew { struct_: WasmVar { name: "empty".into() }, args: vec![I64Const(tag as i64)] }]);
-                // if elements.is_empty() {
-                // return (vec![StructNew(WasmVar{name: "empty".into()})],locals)
-                // }
 
                 for element in elements {
+                    let mut s = DefaultHasher::default();
                     "cons".hash(&mut s);
                     let tag = s.finish();
 
@@ -544,13 +552,8 @@ impl WasmThing {
                 return (instructions, locals);
             }
             TypedExpr::Case { subjects, clauses, .. } => {
-                //typ is what we want on the stack after this. Prolly a block or series...
-                // dbg!(typ);
-
-                // dbg!(subjects);
-                // dbg!(clauses);
-
-                if clauses.len() != 2 || subjects.len() != 1 {
+                let change_me = 2;
+                if clauses.len() != change_me || subjects.len() != 1 {
                     todo!()
                 }
 
@@ -562,9 +565,8 @@ impl WasmThing {
                     todo!()
                 };
 
+                let mut ifs: Vec<WasmInstruction> = Vec::with_capacity(change_me);
 
-                let mut blocks: Vec<WasmInstruction> = Vec::with_capacity(1);
-                let mut last = false; //TODO ugh
                 for clause in clauses {
                     if !clause.alternative_patterns.is_empty() {
                         todo!()
@@ -572,27 +574,37 @@ impl WasmThing {
 
                     if let [Pattern::List { location, elements, tail, type_ }] = &clause.pattern[..] {
                         let mut after = Vec::new();
+                        let mut condition = Vec::new();
                         let is_empty_match = elements.is_empty() && tail.is_none(); //TODO not exhaustive I'd guess.
 
-
-                        //TODO try if on tag instead of branch?
-
                         if is_empty_match {
+                            let mut s = DefaultHasher::default();
+                            "empty".hash(&mut s);
+                            let tag = s.finish();
+                            condition = vec![WasmInstruction::I64Eq(vec![StructGet(WasmVar { name: "list".into() }, WasmVar { name: "tag".into() }), I64Const(tag as i64)])];
                             let x = self.transform_gleam_expression(&clause.then);
                             after = x.0;
                         } else {
+                            let mut s = DefaultHasher::default();
+                            "cons".hash(&mut s); //TODO Extract some haseh thing since nee a fresh one with no internal state? In any case want i32
+                            let tag = s.finish();
+                            condition = vec![WasmInstruction::I64Eq(vec![StructGet(WasmVar { name: "list".into() }, WasmVar { name: "tag".into() }), I64Const(tag as i64)])];
+
+
                             //Take assignments of tail and head (for now what if we match like: [x,y,..z] not yet!TODO)
                             if elements.len() != 1 || tail.is_none() {
                                 todo!();
                             }
 
                             for element in elements {
-                                if let Pattern::Variable { name, .. } = element {
+                                if let Pattern::Variable { name, type_, .. } = element {
                                     // after.push(LocalGet(WasmVar { name: subj.clone() }));
                                     after.push(RefCast(WasmVar { name: "cons".into() }, vec![LocalGet(WasmVar { name: subj.clone() })])); //since we know if not empty is a cons
                                     after.push(WasmInstruction::StructGet(WasmVar { name: "cons".into() }, WasmVar { name: "value".into() }));
                                     // after.push(WasmInstruction::Local(WasmVar { name: name.clone() }, WasmType::ConcreteRef(WasmVar { name: "heap_type".into() })));
-                                    locals.push((WasmVar { name: name.clone() }, WasmType::EqRef)); //TODO modify name based on block!
+                                    let head_type = self.transform_gleam_type(type_);
+                                    locals.push((WasmVar { name: name.clone() }, head_type.clone()));
+                                    after.push(WasmInstruction::Cast(head_type));
                                     after.push(WasmInstruction::LocalSet(WasmVar { name: name.clone() }));
                                 } else {
                                     todo!()
@@ -603,7 +615,8 @@ impl WasmThing {
                             match tail {
                                 Some(x) => match x.as_ref() {
                                     Pattern::Variable { name, .. } => {
-                                        after.push(LocalGet(WasmVar { name: subj.clone() }));
+                                        after.push(RefCast(WasmVar { name: "cons".into() }, vec![LocalGet(WasmVar { name: subj.clone() })])); //since we know if not empty is a cons
+                                        // after.push(LocalGet(WasmVar { name: subj.clone() })); //HEREEEEEEEE
                                         after.push(WasmInstruction::StructGet(WasmVar { name: "cons".into() }, WasmVar { name: "prev".into() }));
                                         // after.push(WasmInstruction::Local(WasmVar { name: name.clone() }, WasmType::ConcreteRef(WasmVar { name: "list".into() })));
                                         locals.push((WasmVar { name: name.clone() }, WasmType::ConcreteRef(WasmVar { name: "list".into() }))); //TODO modify name based on block!
@@ -617,48 +630,17 @@ impl WasmThing {
                             // todo!();
                             after.append(&mut self.transform_gleam_expression(&clause.then).0);
                         }
-
-
-                        if last {
-                            let mut block = &mut blocks[0];
-                            if let Block { inner, .. } = block {
-                                *inner = vec![Block {
-                                    inner: vec![BranchCastTwo {
-                                        local_: WasmVar { name: subj.clone() },
-                                        type_: WasmType::ConcreteRef(WasmVar { name: if is_empty_match { "cons".into() } else { "empty".into() } }),
-                                        block_matching_type: WasmVar { name: "first_block".into() },
-                                        block_matching_type_idx: (elements.len() + 1) as u32,
-                                    }],
-                                    after,
-                                    name: WasmVar { name: "last_block".into() },
-                                }];
-                            }
-                            // blocks.push(
-                            //     Block {
-                            //         inner: vec![BranchCastTwo {
-                            //             local_: WasmVar { name: subj.clone() },
-                            //             type_: WasmType::ConcreteRef(WasmVar { name: if is_empty_match {"cons".into()} else {"empty".into()} }),
-                            //             block_matching_type: WasmVar { name: "first_block".into() },
-                            //         }],
-                            //         after,
-                            //         name: WasmVar { name: "last_block".into() },
-                            //     }
-                            // );
-                        } else {
-                            blocks.push(
-                                Block {
-                                    inner: vec![],
-                                    after,
-                                    name: WasmVar { name: "first_block".into() },
-                                }
-                            );
-                        }
+                        ifs.push(LocalGet(WasmVar { name: subj.clone() })); //Have it on the stack for the if
+                        ifs.push(IfReturn {
+                            condition: condition,
+                            if_branch: after,
+                        });
                     } else {
                         todo!()
                     }
-                    last = true;
                 }
-                return (blocks, locals);
+                ifs.push(WasmInstruction::Unreachable); //TODO oh no! This wont work at all.
+                return (ifs, locals);
             }
             x => {
                 dbg!(x);
