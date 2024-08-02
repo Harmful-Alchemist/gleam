@@ -6,11 +6,12 @@ use super::{
 };
 use crate::{
     ast::*,
+    decisiontree::{DecisionTree, DecisionTreeGenerator},
     line_numbers::LineNumbers,
     pretty::*,
     type_::{ModuleValueConstructor, Type, ValueConstructor, ValueConstructorVariant},
 };
-use std::sync::Arc;
+use std::{borrow::Borrow, sync::Arc};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Position {
@@ -44,6 +45,7 @@ pub(crate) struct Generator<'module> {
     // at the top level of the function to use in place of pushing new stack
     // frames.
     pub tail_recursion_used: bool,
+    variant_count: &'module HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
 }
 
 impl<'module> Generator<'module> {
@@ -55,6 +57,7 @@ impl<'module> Generator<'module> {
         function_arguments: Vec<Option<&'module EcoString>>,
         tracker: &'module mut UsageTracker,
         mut current_scope_vars: im::HashMap<EcoString, usize>,
+        variant_count: &'module HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
     ) -> Self {
         let mut function_name = Some(function_name);
         for &name in function_arguments.iter().flatten() {
@@ -77,6 +80,7 @@ impl<'module> Generator<'module> {
             current_scope_vars,
             function_position: Position::Tail,
             scope_position: Position::Tail,
+            variant_count,
         }
     }
 
@@ -558,11 +562,101 @@ impl<'module> Generator<'module> {
         Ok(doc.append(afterwards).force_break())
     }
 
+    // TODO switch the feature switches again!
+    #[cfg(not(feature = "decisiontree"))]
     fn case<'a>(
         &mut self,
         subject_values: &'a [TypedExpr],
         clauses: &'a [TypedClause],
     ) -> Output<'a> {
+        // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.
+        let (subjects, subject_assignments): (Vec<_>, Vec<_>) =
+            pattern::assign_subjects(self, subject_values)
+                .into_iter()
+                .unzip();
+
+        // If there is a subject name given create a variable to hold it for
+        // use in patterns
+        let subject_assignments: Vec<_> = subject_assignments //Right we go these above, clear.
+            .into_iter()
+            .zip(subject_values)
+            .flat_map(|(assignment_name, value)| assignment_name.map(|name| (name, value)))
+            .map(|(name, value)| {
+                let value = self.not_in_tail_position(|gen| gen.wrap_expression(value))?;
+                Ok(docvec!("let ", name, " = ", value, ";", line()))
+            })
+            .try_collect()?;
+
+        //TODO clone!
+        let tree = DecisionTreeGenerator::new(subject_values, clauses, self.variant_count.clone())
+            .to_tree();
+        // let tree = &tree;
+        // println!("{tree:?}");
+        // println!("got a tree!\n\n");
+        // dbg!(tree);
+        // println!("\n\n");
+
+        // let mut gen = pattern::Generator::new(self);
+
+        // let mut doc = nil();
+        let doc = self.decision_tree(tree)?;
+
+        // Ok(docvec![subject_assignments, doc].force_break())
+        Ok(docvec![subject_assignments, doc].force_break())
+    }
+
+    fn decision_tree<'a>(&mut self, tree: DecisionTree) -> Output<'a> {
+        match tree {
+            DecisionTree::Switch {
+                discriminant,
+                cases,
+            } => {
+                let mut vec = Vec::new();
+                let mut first = true;
+                for case in cases {
+                    vec.push(self.tree_case(case.0, case.1, discriminant.clone(), first)?);
+                    first = false;
+                }
+                Ok(docvec!(vec).force_break())
+            },
+            DecisionTree::Success { branch, bindings } => {
+                self.expression(branch)
+            },
+            DecisionTree::Unreachable => Ok(self.throw_error(
+                "Bad tree",
+                &docvec!["bad tree"],
+                SrcSpan { start: 0, end: 0 },
+                [],
+            )),
+        }
+
+        // todo!()
+    }
+
+        
+    fn tree_case<'a>(&mut self, case: crate::decisiontree::Case, tree: Box<DecisionTree>, discriminant: TypedExpr, first: bool) -> Output<'a> {
+        let processed_tree = self.decision_tree(*tree)?;
+        let check = match case {
+            crate::decisiontree::Case::ConstructorEquality { constructor } => {
+                let start = if first {"if ("} else {"else if ("};
+                let var = self.expression(discriminant)?;
+                docvec!(start, discriminant, " === ",var ,") {",line(), processed_tree, line(), "}")
+            },
+            crate::decisiontree::Case::ConstantEquality(_) => todo!(),
+            crate::decisiontree::Case::Default => docvec!("else {", line(), processed_tree, line(), "}")
+        };
+
+        
+        Ok(docvec![check].force_break())
+    }
+
+    #[cfg(feature = "decisiontree")]
+    fn case<'a>(
+        &mut self,
+        subject_values: &'a [TypedExpr],
+        clauses: &'a [TypedClause],
+    ) -> Output<'a> {
+        // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.
         let (subjects, subject_assignments): (Vec<_>, Vec<_>) =
             pattern::assign_subjects(self, subject_values)
                 .into_iter()
@@ -579,7 +673,7 @@ impl<'module> Generator<'module> {
             .iter()
             .map(|c| c.alternative_patterns.len())
             .sum::<usize>()
-            + clauses.len();
+            + clauses.len(); //Pattern per subject adding alternatives '|'.
 
         // A case has many clauses `pattern -> consequence`
         for clause in clauses {
@@ -588,14 +682,14 @@ impl<'module> Generator<'module> {
 
             // A clause can have many patterns `pattern, pattern ->...`
             for multipatterns in multipatterns {
-                let scope = gen.expression_generator.current_scope_vars.clone();
+                let scope = gen.expression_generator.current_scope_vars.clone(); //Starting scope same as outer.
                 let mut compiled = gen.generate(&subjects, multipatterns, clause.guard.as_ref())?;
                 let consequence = gen
                     .expression_generator
                     .expression_flattening_blocks(&clause.then)?;
 
                 // We've seen one more clause
-                clause_number += 1;
+                clause_number += 1; //So alternative patterns add a clause, yeah since we generate for each...
 
                 // Reset the scope now that this clause has finished, causing the
                 // variables to go out of scope.
@@ -660,6 +754,7 @@ impl<'module> Generator<'module> {
             })
             .try_collect()?;
 
+        // Assignments before doc (the case match sure.)
         Ok(docvec![subject_assignments, doc].force_break())
     }
 

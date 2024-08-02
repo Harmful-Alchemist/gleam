@@ -1,15 +1,9 @@
 use crate::{
-    analyse::TargetSupport,
-    build::{ErlangAppCodegenConfiguration, Module},
-    config::PackageConfig,
-    erlang,
-    io::FileSystemWriter,
-    javascript,
-    line_numbers::LineNumbers,
-    Result,
+    analyse::TargetSupport, ast::{CustomType, RecordConstructor}, build::{ErlangAppCodegenConfiguration, Module}, config::PackageConfig, erlang, io::FileSystemWriter, javascript, line_numbers::LineNumbers, type_::Type, Result
 };
+use ecow::EcoString;
 use itertools::Itertools;
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use camino::Utf8Path;
 
@@ -179,12 +173,31 @@ impl<'a> JavaScript<'a> {
     }
 
     pub fn render(&self, writer: &impl FileSystemWriter, modules: &[Module]) -> Result<()> {
+        //Shoot here they are all together....
+        let mut variant_count = HashMap::new();
+
+        for module in modules {
+            for definition in &module.ast.definitions {
+                match definition {
+                    crate::ast::Definition::CustomType(CustomType{constructors, name, ..}) => {
+                        // println!("=\n{constructors:?}\n=");
+                        let _ = variant_count.insert((module.name.clone(),name.clone()), constructors.clone());
+                    },
+                    _ => ()
+                }
+            }
+        }
+
+
         for module in modules {
             let js_name = module.name.clone();
             if self.typescript == TypeScriptDeclarations::Emit {
                 self.ts_declaration(writer, module, &js_name)?;
             }
-            self.js_module(writer, module, &js_name)?
+            //TODO clone!
+            // dbg!(module);
+            // println!("{module:?}");
+            self.js_module(writer, module, &js_name, variant_count.clone())?
         }
         self.write_prelude(writer)?;
         Ok(())
@@ -231,6 +244,7 @@ impl<'a> JavaScript<'a> {
         writer: &impl FileSystemWriter,
         module: &Module,
         js_name: &str,
+        variant_count: HashMap<(EcoString, EcoString),Vec<RecordConstructor<Arc<Type>>>>
     ) -> Result<()> {
         let name = format!("{js_name}.mjs");
         let path = self.output_directory.join(name);
@@ -242,6 +256,7 @@ impl<'a> JavaScript<'a> {
             &module.code,
             self.target_support,
             self.typescript,
+            variant_count
         );
         tracing::debug!(name = ?js_name, "Generated js module");
         writer.write(&path, &output?)

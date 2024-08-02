@@ -5,10 +5,14 @@ mod pattern;
 mod tests;
 mod typescript;
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use crate::analyse::TargetSupport;
 use crate::build::Target;
 use crate::codegen::TypeScriptDeclarations;
-use crate::type_::PRELUDE_MODULE_NAME;
+use crate::type_::{Type, PRELUDE_MODULE_NAME};
 use crate::{
     ast::{CustomType, Function, Import, ModuleConstant, TypeAlias, *},
     docvec,
@@ -44,6 +48,7 @@ pub struct Generator<'a> {
     current_module_name_segments_count: usize,
     target_support: TargetSupport,
     typescript: TypeScriptDeclarations,
+    variant_count: HashMap<(EcoString, EcoString),Vec<RecordConstructor<Arc<Type>>>>,
 }
 
 impl<'a> Generator<'a> {
@@ -52,6 +57,7 @@ impl<'a> Generator<'a> {
         module: &'a TypedModule,
         target_support: TargetSupport,
         typescript: TypeScriptDeclarations,
+        variant_count: HashMap<(EcoString, EcoString),Vec<RecordConstructor<Arc<Type>>>>,
     ) -> Self {
         let current_module_name_segments_count = module.name.split('/').count();
 
@@ -63,6 +69,7 @@ impl<'a> Generator<'a> {
             module_scope: Default::default(),
             target_support,
             typescript,
+            variant_count,
         }
     }
 
@@ -212,10 +219,10 @@ impl<'a> Generator<'a> {
             Definition::TypeAlias(TypeAlias { .. }) => None,
 
             // Handled in collect_imports
-            Definition::Import(Import { .. }) => None,
+            Definition::Import(Import { .. }) => None, //TODO also variant count?
 
             // Handled in collect_definitions
-            Definition::CustomType(CustomType { .. }) => None,
+            Definition::CustomType(CustomType { .. }) => None, //TODO know em? Check where says handled!
 
             Definition::ModuleConstant(ModuleConstant {
                 publicity,
@@ -495,6 +502,7 @@ impl<'a> Generator<'a> {
             argument_names,
             &mut self.tracker,
             self.module_scope.clone(),
+            &self.variant_count,
         );
         let head = if function.publicity.is_private() {
             "function "
@@ -556,8 +564,9 @@ pub fn module(
     src: &EcoString,
     target_support: TargetSupport,
     typescript: TypeScriptDeclarations,
+    variant_count: HashMap<(EcoString, EcoString),Vec<RecordConstructor<Arc<Type>>>>
 ) -> Result<String, crate::Error> {
-    let document = Generator::new(line_numbers, module, target_support, typescript)
+    let document = Generator::new(line_numbers, module, target_support, typescript, variant_count)
         .compile()
         .map_err(|error| crate::Error::JavaScript {
             path: path.to_path_buf(),

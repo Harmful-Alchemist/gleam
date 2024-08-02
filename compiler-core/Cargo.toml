@@ -75,3 +75,6 @@ pretty_assertions.workspace = true
 insta.workspace = true
 # Random value generation
 rand = "0"
+
+[features]
+decisiontree = []

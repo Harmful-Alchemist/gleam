@@ -1,3 +1,5 @@
+use std::intrinsics::variant_count;
+
 use crate::{
     analyse::TargetSupport,
     build::{Origin, Target},
@@ -148,7 +150,7 @@ pub fn compile(src: &str, deps: Vec<(&str, &str, &str)>) -> TypedModule {
     .expect("should successfully infer")
 }
 
-pub fn compile_js(src: &str, deps: Vec<(&str, &str, &str)>) -> String {
+pub fn compile_js(src: &str, deps: Vec<(&str, &str, &str)>, variant_count: HashMap<(EcoString,EcoString),usize>) -> String {
     let ast = compile(src, deps);
     let line_numbers = LineNumbers::new(src);
     module(
@@ -158,6 +160,7 @@ pub fn compile_js(src: &str, deps: Vec<(&str, &str, &str)>) -> String {
         &"".into(),
         TargetSupport::NotEnforced,
         TypeScriptDeclarations::None,
+        variant_count
     )
     .unwrap()
 }
