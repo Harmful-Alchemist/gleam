@@ -99,7 +99,7 @@ fn compile_tree(
         matrix.patterns[0].iter().enumerate().for_each(|(i,p)| {
             match p {
                 Pattern::Variable { name,.. } => {
-                    if !bindings.contains_key(name) {
+                    if !bindings.contains_key(name) { //TODO wellllllllllll Hmmmm Maybe just for list.... Else scop issues?
                         let _ = bindings.insert(name.clone(), Binding::Expr(matrix.hs[i].clone())); 
                     }
                     // Ok kinda fun but! Should be the tail etc from before! So do get the tags here before somehow that should have the right logic right except if started as list since then newer overwrites, fuck!
@@ -233,26 +233,6 @@ fn get_tags(
                                 head_element: Some(elements[0].clone()),
                                 tail: tail.clone(),
                             });
-                            let name = match &elements[0] {
-                                Pattern::Variable { location, name, type_ } => name.clone(),
-                               _ => todo!()
-                            };
-                            //TODO well we don't heve the list name here right? So we know later....
-                            // dbg!((name.clone(), Binding::ListHead));
-                            // let _ = matrix.actions_and_env[row_idx].1.insert(name.clone(), Binding::ListHead);
-                            // dbg!(&tail);
-                            let tail_name = match tail {
-                                Some(x) => match x.as_ref() {
-                                    Pattern::Variable {  name,..} => {
-                                        name.clone()
-                                    }
-                                    _ => todo!()
-                                },
-                                None => todo!(),
-                            };
-                            // dbg!((name.clone(), Binding::ListTail));
-                            // let _ = matrix.actions_and_env[row_idx].1.insert(tail_name.clone(), Binding::ListTail);
-                            // dbg!(&matrix.actions_and_env[row_idx].1);
                         } else if elements.len() == 0 && tail.is_none() {
                             //Empty list.
                             let _ = tags.push(Tag::List {
@@ -455,73 +435,6 @@ fn compile_branch(
                                         }
                                         (_, _) => panic!(),
                                     }
-                                    // let thing = &matrix.hs[i];
-                                    // // println!("thhing: {thing:?}");
-                                    // match &matrix.hs[i] {
-                                    //     TypedExpr::List { elements, tail, .. } => {
-                                    //         println!("even used???");
-                                    //         new_matrix.hs.push(elements[0].clone());
-                                    //         new_matrix
-                                    //             .hs
-                                    //             .push(tail.clone().unwrap().as_ref().clone());
-                                    //         //Stupid
-                                    //     }
-                                    //     TypedExpr::Var { name, .. } => {
-                                    //         //Oooooooh shoot this is the whole list duh get the head and tail! Get them from the tag? whut....Looks like!
-                                    //         // new_matrix.hs.push(thing.clone());
-                                    //         //TODO use name???? Add to env? Prolly yeah
-                                    //         // println!("add to env? Or we have var name already so eh....");
-                                    //         if let Pattern::List { elements, .. } = p1 {
-                                    //             if let Some(Pattern::Variable {
-                                    //                 location,
-                                    //                 name,
-                                    //                 type_,
-                                    //             }) = elements.first()
-                                    //             {
-                                    //                 new_matrix.hs.push(TypedExpr::Var { location: location.clone(), constructor: ValueConstructor {
-                                    //             publicity: Publicity::Internal,
-                                    //             deprecation: Deprecation::NotDeprecated,
-                                    //             variant: ValueConstructorVariant::LocalVariable{location: location.clone()},
-                                    //             type_: type_.clone(),
-                                    //         }, name: name.clone() })
-                                    //             } else {
-                                    //                 panic!();
-                                    //             }
-                                    //         } else {
-                                    //             dbg!(p1);
-                                    //             dbg!(p2);
-                                    //             // Oh shoot yeah now we recurr but ehm well now.........
-                                    //             //Maybe we need to start waaaaaaaaaaay simpler!
-                                    //             //go on here next time! Long match
-                                    //             // but only on last pattern or smth Just constructor then can generate the code.
-                                    //             panic!();
-                                    //         }
-
-                                    //         if let Pattern::Variable {
-                                    //             location,
-                                    //             name,
-                                    //             type_,
-                                    //         } = p2.as_ref()
-                                    //         {
-                                    //             new_matrix.hs.push(TypedExpr::Var {
-                                    //                 location: location.clone(),
-                                    //                 constructor: ValueConstructor {
-                                    //                     publicity: Publicity::Internal,
-                                    //                     deprecation: Deprecation::NotDeprecated,
-                                    //                     variant:
-                                    //                         ValueConstructorVariant::LocalVariable {
-                                    //                             location: location.clone(),
-                                    //                         },
-                                    //                     type_: type_.clone(),
-                                    //                 },
-                                    //                 name: name.clone(),
-                                    //             });
-                                    //         } else {
-                                    //             panic!();
-                                    //         }
-                                    //     }
-                                    //     _ => panic!(), //well now
-                                    // }
                                 }
                                 _ => panic!(),
                             }
@@ -550,6 +463,7 @@ fn compile_branch(
     //f output for expand, could be one loop with above but eh.
     for (row_idx, row) in matrix.patterns.iter().enumerate() {
         let mut new_actions_and_env = matrix.actions_and_env[row_idx].clone();
+        dbg!(&new_actions_and_env.0);
         let mut new_row = Vec::new();
         for j in 0..row.len() {
             if i == j {
