@@ -5,19 +5,19 @@ use itertools::Itertools;
 use crate::{
     docvec,
     javascript::{JavaScriptCodegenTarget, INDENT},
-    pretty::{break_, concat, join, line, Document, Documentable},
+    pretty::{break_str, break_, concat, join, line, Document, Documentable},
 };
 
 /// A collection of JavaScript import statements from Gleam imports and from
 /// external functions, to be rendered into a JavaScript module.
 ///
 #[derive(Debug, Default)]
-pub(crate) struct Imports<'a> {
-    imports: HashMap<String, Import<'a>>,
+pub(crate) struct Imports {
+    imports: HashMap<String, Import>,
     exports: HashSet<String>,
 }
 
-impl<'a> Imports<'a> {
+impl Imports {
     pub fn new() -> Self {
         Self::default()
     }
@@ -30,7 +30,7 @@ impl<'a> Imports<'a> {
         &mut self,
         path: String,
         aliases: impl IntoIterator<Item = String>,
-        unqualified_imports: impl IntoIterator<Item = Member<'a>>,
+        unqualified_imports: impl IntoIterator<Item = Member>,
     ) {
         let import = self
             .imports
@@ -40,7 +40,7 @@ impl<'a> Imports<'a> {
         import.unqualified.extend(unqualified_imports)
     }
 
-    pub fn into_doc(self, codegen_target: JavaScriptCodegenTarget) -> Document<'a> {
+    pub fn into_doc(self, codegen_target: JavaScriptCodegenTarget) -> Document {
         let imports = concat(
             self.imports
                 .into_values()
@@ -53,11 +53,11 @@ impl<'a> Imports<'a> {
         } else {
             let names = join(
                 self.exports.into_iter().sorted().map(Document::String),
-                break_(",", ", "),
+                break_str(",", ", "),
             );
             let names = docvec![
-                docvec![break_("", " "), names].nest(INDENT),
-                break_(",", " ")
+                docvec![break_str("", " "), names].nest(INDENT),
+                break_str(",", " ")
             ]
             .group();
             imports
@@ -75,13 +75,13 @@ impl<'a> Imports<'a> {
 }
 
 #[derive(Debug)]
-struct Import<'a> {
+struct Import {
     path: String,
     aliases: HashSet<String>,
-    unqualified: Vec<Member<'a>>,
+    unqualified: Vec<Member>,
 }
 
-impl<'a> Import<'a> {
+impl Import {
     fn new(path: String) -> Self {
         Self {
             path,
@@ -90,7 +90,7 @@ impl<'a> Import<'a> {
         }
     }
 
-    pub fn into_doc(self, codegen_target: JavaScriptCodegenTarget) -> Document<'a> {
+    pub fn into_doc(self, codegen_target: JavaScriptCodegenTarget) -> Document {
         let path = Document::String(self.path.clone());
         let import_modifier = if codegen_target == JavaScriptCodegenTarget::TypeScriptDeclarations {
             "type "
@@ -113,10 +113,10 @@ impl<'a> Import<'a> {
             alias_imports
         } else {
             let members = self.unqualified.into_iter().map(Member::into_doc);
-            let members = join(members, break_(",", ", "));
+            let members = join(members, break_str(",", ", "));
             let members = docvec![
-                docvec![break_("", " "), members].nest(INDENT),
-                break_(",", " ")
+                docvec![break_str("", " "), members].nest(INDENT),
+                break_str(",", " ")
             ]
             .group();
             docvec![
@@ -135,13 +135,13 @@ impl<'a> Import<'a> {
 }
 
 #[derive(Debug)]
-pub struct Member<'a> {
-    pub name: Document<'a>,
-    pub alias: Option<Document<'a>>,
+pub struct Member {
+    pub name: Document,
+    pub alias: Option<Document>,
 }
 
-impl<'a> Member<'a> {
-    fn into_doc(self) -> Document<'a> {
+impl Member {
+    fn into_doc(self) -> Document {
         match self.alias {
             None => self.name,
             Some(alias) => docvec![self.name, " as ", alias],

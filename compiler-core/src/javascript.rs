@@ -5,7 +5,6 @@ mod pattern;
 mod tests;
 mod typescript;
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -31,7 +30,7 @@ const INDENT: isize = 2;
 pub const PRELUDE: &str = include_str!("../templates/prelude.mjs");
 pub const PRELUDE_TS_DEF: &str = include_str!("../templates/prelude.d.mts");
 
-pub type Output<'a> = Result<Document<'a>, Error>;
+pub type Output = Result<Document, Error>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JavaScriptCodegenTarget {
@@ -73,9 +72,9 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn type_reference(&self) -> Document<'a> {
+    fn type_reference(&self) -> Document {
         if self.typescript == TypeScriptDeclarations::None {
-            return Document::Str("");
+            return Document::Str(EcoString::from(""));
         }
 
         // Get the name of the module relative the directory (similar to basename)
@@ -87,12 +86,12 @@ impl<'a> Generator<'a> {
             .last()
             .expect("JavaScript generator could not identify imported module name.");
 
-        let name = Document::Str(module);
+        let name = Document::Str(EcoString::from(module));
 
         docvec!["/// <reference types=\"./", name, ".d.mts\" />", line()]
     }
 
-    pub fn compile(&mut self) -> Output<'a> {
+    pub fn compile(&mut self) -> Output {
         let type_reference = self.type_reference();
 
         // Determine what JavaScript imports we need to generate
@@ -202,7 +201,7 @@ impl<'a> Generator<'a> {
 
     fn register_prelude_usage(
         &self,
-        imports: &mut Imports<'a>,
+        imports: &mut Imports,
         name: &'static str,
         alias: Option<&'static str>,
     ) {
@@ -214,7 +213,7 @@ impl<'a> Generator<'a> {
         imports.register_module(path, [], [member]);
     }
 
-    pub fn statement(&mut self, statement: &'a TypedDefinition) -> Option<Output<'a>> {
+    pub fn statement(&mut self, statement: &'a TypedDefinition) -> Option<Output> {
         match statement {
             Definition::TypeAlias(TypeAlias { .. }) => None,
 
@@ -254,7 +253,7 @@ impl<'a> Generator<'a> {
         constructors: &'a [TypedRecordConstructor],
         publicity: Publicity,
         opaque: bool,
-    ) -> Vec<Output<'a>> {
+    ) -> Vec<Output> {
         // If there's no constructors then there's nothing to do here.
         if constructors.is_empty() {
             return vec![];
@@ -272,8 +271,8 @@ impl<'a> Generator<'a> {
         constructor: &'a TypedRecordConstructor,
         publicity: Publicity,
         opaque: bool,
-    ) -> Document<'a> {
-        fn parameter((i, arg): (usize, &TypedRecordConstructorArg)) -> Document<'_> {
+    ) -> Document {
+        fn parameter((i, arg): (usize, &TypedRecordConstructorArg)) -> Document {
             arg.label
                 .as_ref()
                 .map(|(s, _)| maybe_escape_identifier_doc(s))
@@ -293,7 +292,7 @@ impl<'a> Generator<'a> {
 
         let parameters = join(
             constructor.arguments.iter().enumerate().map(parameter),
-            break_(",", ", "),
+            break_str(",", ", "),
         );
 
         let constructor_body = join(
@@ -321,7 +320,7 @@ impl<'a> Generator<'a> {
         docvec![head, class_body, line(), "}"]
     }
 
-    fn collect_definitions(&mut self) -> Vec<Output<'a>> {
+    fn collect_definitions(&mut self) -> Vec<Output> {
         self.module
             .definitions
             .iter()
@@ -341,7 +340,7 @@ impl<'a> Generator<'a> {
             .collect()
     }
 
-    fn collect_imports(&mut self) -> Imports<'a> {
+    fn collect_imports(&mut self) -> Imports {
         let mut imports = Imports::new();
 
         for statement in &self.module.definitions {
@@ -402,7 +401,7 @@ impl<'a> Generator<'a> {
 
     fn register_import(
         &mut self,
-        imports: &mut Imports<'a>,
+        imports: &mut Imports,
         package: &'a str,
         module: &'a str,
         as_name: &'a Option<(AssignName, SrcSpan)>,
@@ -438,7 +437,7 @@ impl<'a> Generator<'a> {
 
     fn register_external_function(
         &mut self,
-        imports: &mut Imports<'a>,
+        imports: &mut Imports,
         publicity: Publicity,
         name: &'a str,
         module: &'a str,
@@ -466,7 +465,7 @@ impl<'a> Generator<'a> {
         publicity: Publicity,
         name: &'a str,
         value: &'a TypedConstant,
-    ) -> Output<'a> {
+    ) -> Output {
         let head = if publicity.is_private() {
             "const "
         } else {
@@ -489,7 +488,7 @@ impl<'a> Generator<'a> {
         let _ = self.module_scope.insert(name.into(), 0);
     }
 
-    fn module_function(&mut self, function: &'a TypedFunction) -> Option<Output<'a>> {
+    fn module_function(&mut self, function: &'a TypedFunction) -> Option<Output> {
         let argument_names = function
             .arguments
             .iter()
@@ -606,7 +605,7 @@ impl Error {
     }
 }
 
-fn fun_args(args: &'_ [TypedArg], tail_recursion_used: bool) -> Document<'_> {
+fn fun_args(args: &'_ [TypedArg], tail_recursion_used: bool) -> Document {
     let mut discards = 0;
     wrap_args(args.iter().map(|a| match a.get_variable_name() {
         None => {
@@ -623,21 +622,21 @@ fn fun_args(args: &'_ [TypedArg], tail_recursion_used: bool) -> Document<'_> {
     }))
 }
 
-fn wrap_args<'a, I>(args: I) -> Document<'a>
+fn wrap_args<'a, I>(args: I) -> Document
 where
-    I: IntoIterator<Item = Document<'a>>,
+    I: IntoIterator<Item = Document>,
 {
-    break_("", "")
-        .append(join(args, break_(",", ", ")))
+    break_str("", "")
+        .append(join(args, break_str(",", ", ")))
         .nest(INDENT)
-        .append(break_("", ""))
+        .append(break_str("", ""))
         .surround("(", ")")
         .group()
 }
 
 fn wrap_object<'a>(
-    items: impl IntoIterator<Item = (Document<'a>, Option<Document<'a>>)>,
-) -> Document<'a> {
+    items: impl IntoIterator<Item = (Document, Option<Document>)>,
+) -> Document {
     let mut empty = true;
     let fields = items.into_iter().map(|(key, value)| {
         empty = false;
@@ -646,31 +645,31 @@ fn wrap_object<'a>(
             None => key.to_doc(),
         }
     });
-    let fields = join(fields, break_(",", ", "));
+    let fields = join(fields, break_str(",", ", "));
 
     if empty {
         "{}".to_doc()
     } else {
         docvec![
-            docvec!["{", break_("", " "), fields]
+            docvec!["{", break_str("", " "), fields]
                 .nest(INDENT)
-                .append(break_("", " "))
+                .append(break_str("", " "))
                 .group(),
             "}"
         ]
     }
 }
 
-fn try_wrap_object<'a>(items: impl IntoIterator<Item = (Document<'a>, Output<'a>)>) -> Output<'a> {
+fn try_wrap_object<'a>(items: impl IntoIterator<Item = (Document, Output)>) -> Output {
     let fields = items
         .into_iter()
         .map(|(key, value)| Ok(docvec![key, ": ", value?]));
-    let fields: Vec<_> = Itertools::intersperse(fields, Ok(break_(",", ", "))).try_collect()?;
+    let fields: Vec<_> = Itertools::intersperse(fields, Ok(break_str(",", ", "))).try_collect()?;
 
     Ok(docvec![
-        docvec!["{", break_("", " "), fields]
+        docvec!["{", break_str("", " "), fields]
             .nest(INDENT)
-            .append(break_("", " "))
+            .append(break_str("", " "))
             .group(),
         "}"
     ])
@@ -751,7 +750,7 @@ fn escape_identifier(word: &str) -> String {
     format!("{word}$")
 }
 
-fn maybe_escape_identifier_doc(word: &str) -> Document<'_> {
+fn maybe_escape_identifier_doc(word: &str) -> Document {
     if is_usable_js_identifier(word) {
         word.to_doc()
     } else {

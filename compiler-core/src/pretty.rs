@@ -35,113 +35,113 @@ macro_rules! docvec {
 /// Coerce a value into a Document.
 /// Note we do not implement this for String as a slight pressure to favour str
 /// over String.
-pub trait Documentable<'a> {
-    fn to_doc(self) -> Document<'a>;
+pub trait Documentable {
+    fn to_doc(self) -> Document;
 }
 
-impl<'a> Documentable<'a> for char {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for char {
+    fn to_doc(self) -> Document {
         Document::String(format!("{self}"))
     }
 }
 
-impl<'a> Documentable<'a> for &'a str {
-    fn to_doc(self) -> Document<'a> {
-        Document::Str(self)
+impl Documentable for &str {
+    fn to_doc(self) -> Document {
+        Document::Str(EcoString::from(self))
     }
 }
 
-impl<'a> Documentable<'a> for EcoString {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for EcoString {
+    fn to_doc(self) -> Document {
         Document::EcoString(self)
     }
 }
 
-impl<'a> Documentable<'a> for &EcoString {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for &EcoString {
+    fn to_doc(self) -> Document {
         Document::EcoString(self.clone())
     }
 }
 
-impl<'a> Documentable<'a> for isize {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for isize {
+    fn to_doc(self) -> Document {
         Document::String(format!("{self}"))
     }
 }
 
-impl<'a> Documentable<'a> for i64 {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for i64 {
+    fn to_doc(self) -> Document {
         Document::String(format!("{self}"))
     }
 }
 
-impl<'a> Documentable<'a> for usize {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for usize {
+    fn to_doc(self) -> Document {
         Document::String(format!("{self}"))
     }
 }
 
-impl<'a> Documentable<'a> for f64 {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for f64 {
+    fn to_doc(self) -> Document {
         Document::String(format!("{self:?}"))
     }
 }
 
-impl<'a> Documentable<'a> for u64 {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for u64 {
+    fn to_doc(self) -> Document {
         Document::String(format!("{self:?}"))
     }
 }
 
-impl<'a> Documentable<'a> for u32 {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for u32 {
+    fn to_doc(self) -> Document {
         Document::String(format!("{self}"))
     }
 }
 
-impl<'a> Documentable<'a> for u16 {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for u16 {
+    fn to_doc(self) -> Document {
         Document::String(format!("{self}"))
     }
 }
 
-impl<'a> Documentable<'a> for u8 {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for u8 {
+    fn to_doc(self) -> Document {
         Document::String(format!("{self}"))
     }
 }
 
-impl<'a> Documentable<'a> for Document<'a> {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for Document {
+    fn to_doc(self) -> Document {
         self
     }
 }
 
-impl<'a> Documentable<'a> for Vec<Document<'a>> {
-    fn to_doc(self) -> Document<'a> {
+impl<'a> Documentable for Vec<Document> {
+    fn to_doc(self) -> Document {
         Document::Vec(self)
     }
 }
 
-impl<'a, D: Documentable<'a>> Documentable<'a> for Option<D> {
-    fn to_doc(self) -> Document<'a> {
+impl<'a, D: Documentable> Documentable for Option<D> {
+    fn to_doc(self) -> Document {
         self.map(Documentable::to_doc).unwrap_or_else(nil)
     }
 }
 
-pub fn concat<'a>(docs: impl IntoIterator<Item = Document<'a>>) -> Document<'a> {
+pub fn concat<'a>(docs: impl IntoIterator<Item = Document>) -> Document {
     Document::Vec(docs.into_iter().collect())
 }
 
 pub fn join<'a>(
-    docs: impl IntoIterator<Item = Document<'a>>,
-    separator: Document<'a>,
-) -> Document<'a> {
+    docs: impl IntoIterator<Item = Document>,
+    separator: Document,
+) -> Document {
     concat(Itertools::intersperse(docs.into_iter(), separator))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Document<'a> {
+pub enum Document {
     /// A mandatory linebreak
     Line(usize),
 
@@ -155,8 +155,8 @@ pub enum Document<'a> {
 
     /// Renders `broken` if group is broken, `unbroken` otherwise
     Break {
-        broken: &'a str,
-        unbroken: &'a str,
+        broken: EcoString,
+        unbroken: EcoString,
         kind: BreakKind,
     },
 
@@ -174,7 +174,7 @@ pub enum Document<'a> {
     String(String),
 
     /// A str to render
-    Str(&'a str),
+    Str(EcoString),
 
     /// A string that is cheap to copy
     EcoString(EcoString),
@@ -237,7 +237,7 @@ pub enum NestMode {
 fn fits(
     limit: isize,
     mut current_width: isize,
-    mut docs: im::Vector<(isize, Mode, &Document<'_>)>,
+    mut docs: im::Vector<(isize, Mode, &Document)>,
 ) -> bool {
     // The `fits` function is going to take each document from the `docs` queue
     // and check if those can fit on a single line. In order to do so documents
@@ -384,7 +384,7 @@ fn format(
     writer: &mut impl Utf8Writer,
     limit: isize,
     mut width: isize,
-    mut docs: im::Vector<(isize, Mode, &Document<'_>)>,
+    mut docs: im::Vector<(isize, Mode, &Document)>,
 ) -> Result<()> {
     // As long as there are documents to print we'll take each one by one and
     // output the corresponding string to the given writer.
@@ -551,19 +551,19 @@ fn format(
     Ok(())
 }
 
-pub fn nil<'a>() -> Document<'a> {
+pub fn nil<'a>() -> Document {
     Document::Vec(vec![])
 }
 
-pub fn line<'a>() -> Document<'a> {
+pub fn line<'a>() -> Document {
     Document::Line(1)
 }
 
-pub fn lines<'a>(i: usize) -> Document<'a> {
+pub fn lines<'a>(i: usize) -> Document {
     Document::Line(i)
 }
 
-pub fn break_<'a>(broken: &'a str, unbroken: &'a str) -> Document<'a> {
+pub fn break_<'a>(broken: EcoString, unbroken: EcoString) -> Document {
     Document::Break {
         broken,
         unbroken,
@@ -571,15 +571,23 @@ pub fn break_<'a>(broken: &'a str, unbroken: &'a str) -> Document<'a> {
     }
 }
 
-pub fn flex_break<'a>(broken: &'a str, unbroken: &'a str) -> Document<'a> {
+pub fn break_str(broken: &str, unbroken: &str) -> Document {
     Document::Break {
-        broken,
-        unbroken,
+        broken: EcoString::from(broken),
+        unbroken: EcoString::from(unbroken),
+        kind: BreakKind::Strict,
+    }
+}
+
+pub fn flex_break<'a>(broken: &str, unbroken: &str) -> Document {
+    Document::Break {
+        broken: EcoString::from(broken),
+        unbroken: EcoString::from(unbroken),
         kind: BreakKind::Flex,
     }
 }
 
-impl<'a> Document<'a> {
+impl<'a> Document {
     pub fn group(self) -> Self {
         Self::Group(Box::new(self))
     }
@@ -614,7 +622,7 @@ impl<'a> Document<'a> {
         Self::NextBreakFits(Box::new(self), mode)
     }
 
-    pub fn append(self, second: impl Documentable<'a>) -> Self {
+    pub fn append(self, second: impl Documentable) -> Self {
         match self {
             Self::Vec(mut vec) => {
                 vec.push(second.to_doc());
@@ -631,7 +639,7 @@ impl<'a> Document<'a> {
         buffer
     }
 
-    pub fn surround(self, open: impl Documentable<'a>, closed: impl Documentable<'a>) -> Self {
+    pub fn surround(self, open: impl Documentable, closed: impl Documentable) -> Self {
         open.to_doc().append(self).append(closed)
     }
 

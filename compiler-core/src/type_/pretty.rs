@@ -50,7 +50,7 @@ impl Printer {
     // TODO: have this function return a Document that borrows from the Type.
     // Is this possible? The lifetime would have to go through the Arc<Refcell<Type>>
     // for TypeVar::Link'd types.
-    pub fn print<'a>(&mut self, typ: &Type) -> Document<'a> {
+    pub fn print<'a>(&mut self, typ: &Type) -> Document {
         match typ {
             Type::Named {
                 name, args, module, ..
@@ -75,7 +75,7 @@ impl Printer {
                 .append(self.args_to_gleam_doc(args))
                 .append(") ->")
                 .append(
-                    break_("", " ")
+                    break_str("", " ")
                         .append(self.print(retrn))
                         .nest(INDENT)
                         .group(),
@@ -95,14 +95,14 @@ impl Printer {
         }
     }
 
-    fn type_var_doc<'a>(&mut self, typ: &TypeVar) -> Document<'a> {
+    fn type_var_doc<'a>(&mut self, typ: &TypeVar) -> Document {
         match typ {
             TypeVar::Link { type_: ref typ, .. } => self.print(typ),
             TypeVar::Unbound { id, .. } | TypeVar::Generic { id, .. } => self.generic_type_var(*id),
         }
     }
 
-    pub fn generic_type_var<'a>(&mut self, id: u64) -> Document<'a> {
+    pub fn generic_type_var<'a>(&mut self, id: u64) -> Document {
         match self.names.get(&id) {
             Some(n) => {
                 let _ = self.printed_types.insert(n.clone(), "".into());
@@ -139,24 +139,24 @@ impl Printer {
         chars.into_iter().rev().collect()
     }
 
-    fn args_to_gleam_doc(&mut self, args: &[Arc<Type>]) -> Document<'static> {
+    fn args_to_gleam_doc(&mut self, args: &[Arc<Type>]) -> Document {
         if args.is_empty() {
             return nil();
         }
 
         let args = join(
             args.iter().map(|t| self.print(t).group()),
-            break_(",", ", "),
+            break_str(",", ", "),
         );
-        break_("", "")
+        break_str("", "")
             .append(args)
             .nest(INDENT)
-            .append(break_(",", ""))
+            .append(break_str(",", ""))
             .group()
     }
 }
 
-fn qualify_type_name(module: &str, type_name: &str) -> Document<'static> {
+fn qualify_type_name(module: &str, type_name: &str) -> Document {
     let type_name = Document::String(type_name.to_string());
     docvec![Document::String(module.to_string()), ".", type_name]
 }

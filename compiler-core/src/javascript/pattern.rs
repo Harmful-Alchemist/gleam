@@ -10,9 +10,9 @@ use crate::{
 pub static ASSIGNMENT_VAR: &str = "$";
 
 #[derive(Debug)]
-enum Index<'a> {
+enum Index {
     Int(usize),
-    String(&'a str),
+    String(EcoString),
     ByteAt(usize),
     IntFromSlice(usize, usize),
     FloatAt(usize),
@@ -22,11 +22,11 @@ enum Index<'a> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Generator<'module_ctx, 'expression_gen, 'a> {
+pub(crate) struct Generator<'module_ctx, 'expression_gen> {
     pub expression_generator: &'expression_gen mut expression::Generator<'module_ctx>,
-    path: Vec<Index<'a>>,
-    checks: Vec<Check<'a>>,
-    assignments: Vec<Assignment<'a>>,
+    path: Vec<Index>,
+    checks: Vec<Check>,
+    assignments: Vec<Assignment>,
 }
 
 struct Offset {
@@ -52,7 +52,7 @@ impl Offset {
     }
 }
 
-impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, 'a> {
+impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen> {
     pub fn new(
         expression_generator: &'expression_gen mut expression::Generator<'module_ctx>,
     ) -> Self {
@@ -64,16 +64,16 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
         }
     }
 
-    fn next_local_var(&mut self, name: &'a EcoString) -> Document<'a> {
+    fn next_local_var(&mut self, name: &EcoString) -> Document {
         self.expression_generator.next_local_var(name)
     }
 
-    fn local_var(&mut self, name: &'a EcoString) -> Document<'a> {
+    fn local_var(&mut self, name: &EcoString) -> Document {
         self.expression_generator.local_var(name)
     }
 
-    fn push_string(&mut self, s: &'a str) {
-        self.path.push(Index::String(s));
+    fn push_string(&mut self, s: &str) {
+        self.path.push(Index::String(EcoString::from(s)));
     }
 
     fn push_int(&mut self, i: usize) {
@@ -104,7 +104,7 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
         self.path.push(Index::SliceAfter(i));
     }
 
-    fn push_string_times(&mut self, s: &'a str, times: usize) {
+    fn push_string_times(&mut self, s: &str, times: usize) {
         for _ in 0..times {
             self.push_string(s);
         }
@@ -120,7 +120,7 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
         }
     }
 
-    fn path_document(&self) -> Document<'a> {
+    fn path_document(&self) -> Document {
         concat(self.path.iter().map(|segment| match segment {
             Index::Int(i) => Document::String(format!("[{i}]")),
             // TODO: escape string if needed
@@ -138,10 +138,10 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
 
     pub fn generate(
         &mut self,
-        subjects: &[Document<'a>],
-        patterns: &'a [TypedPattern],
-        guard: Option<&'a TypedClauseGuard>,
-    ) -> Result<CompiledPattern<'a>, Error> {
+        subjects: &[Document],
+        patterns: &[TypedPattern],
+        guard: Option<&TypedClauseGuard>,
+    ) -> Result<CompiledPattern, Error> {
         for (subject, pattern) in subjects.iter().zip_eq(patterns) {
             self.traverse_pattern(subject, pattern)?;
         }
@@ -152,20 +152,20 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
         Ok(self.take_compiled())
     }
 
-    pub fn take_compiled(&mut self) -> CompiledPattern<'a> {
+    pub fn take_compiled(&mut self) -> CompiledPattern {
         CompiledPattern {
             checks: std::mem::take(&mut self.checks),
             assignments: std::mem::take(&mut self.assignments),
         }
     }
 
-    fn push_guard_check(&mut self, guard: &'a TypedClauseGuard) -> Result<(), Error> {
+    fn push_guard_check(&mut self, guard: &TypedClauseGuard) -> Result<(), Error> {
         let expression = self.guard(guard)?;
         self.checks.push(Check::Guard { expression });
         Ok(())
     }
 
-    fn wrapped_guard(&mut self, guard: &'a TypedClauseGuard) -> Result<Document<'a>, Error> {
+    fn wrapped_guard(&mut self, guard: &TypedClauseGuard) -> Result<Document, Error> {
         match guard {
             ClauseGuard::Var { .. }
             | ClauseGuard::TupleIndex { .. }
@@ -198,7 +198,7 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
         }
     }
 
-    fn guard(&mut self, guard: &'a TypedClauseGuard) -> Output<'a> {
+    fn guard(&mut self, guard: &TypedClauseGuard) -> Output {
         Ok(match guard {
             ClauseGuard::Equals { left, right, .. } if is_js_scalar(left.type_()) => {
                 let left = self.wrapped_guard(left)?;
@@ -333,7 +333,7 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
     /// This is in used in clause guards where may use variables defined in
     /// patterns can be referenced, but in the compiled JavaScript they have not
     /// yet been defined.
-    fn path_doc_from_assignments(&self, name: &str) -> Option<Document<'a>> {
+    fn path_doc_from_assignments(&self, name: &str) -> Option<Document> {
         self.assignments
             .iter()
             .find(|assignment| assignment.name == name)
@@ -342,8 +342,8 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
 
     pub fn traverse_pattern(
         &mut self,
-        subject: &Document<'a>,
-        pattern: &'a TypedPattern,
+        subject: &Document,
+        pattern: &TypedPattern,
     ) -> Result<(), Error> {
         match pattern {
             Pattern::String { value, .. } => {
@@ -595,26 +595,26 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
         }
     }
 
-    fn push_assignment(&mut self, subject: Document<'a>, name: &'a EcoString) {
+    fn push_assignment(&mut self, subject: Document, name: &EcoString) {
         let var = self.next_local_var(name);
         let path = self.path_document();
         self.assignments.push(Assignment {
             subject,
             path,
             var,
-            name,
+            name: name.clone(),
         });
     }
 
-    fn push_string_prefix_check(&mut self, subject: Document<'a>, prefix: &'a str) {
+    fn push_string_prefix_check(&mut self, subject: Document, prefix: &str) {
         self.checks.push(Check::StringPrefix {
-            prefix,
+            prefix: EcoString::from(prefix),
             subject,
             path: self.path_document(),
         })
     }
 
-    fn push_booly_check(&mut self, subject: Document<'a>, expected_to_be_truthy: bool) {
+    fn push_booly_check(&mut self, subject: Document, expected_to_be_truthy: bool) {
         self.checks.push(Check::Booly {
             expected_to_be_truthy,
             subject,
@@ -622,7 +622,7 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
         })
     }
 
-    fn push_equality_check(&mut self, subject: Document<'a>, to: Document<'a>) {
+    fn push_equality_check(&mut self, subject: Document, to: Document) {
         self.checks.push(Check::Equal {
             to,
             subject,
@@ -630,7 +630,7 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
         })
     }
 
-    fn push_variant_check(&mut self, subject: Document<'a>, kind: Document<'a>) {
+    fn push_variant_check(&mut self, subject: Document, kind: Document) {
         self.checks.push(Check::Variant {
             kind,
             subject,
@@ -638,7 +638,7 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
         })
     }
 
-    fn push_result_check(&mut self, subject: Document<'a>, is_ok: bool) {
+    fn push_result_check(&mut self, subject: Document, is_ok: bool) {
         self.checks.push(Check::Result {
             is_ok,
             subject,
@@ -648,7 +648,7 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
 
     fn push_list_length_check(
         &mut self,
-        subject: Document<'a>,
+        subject: Document,
         expected_length: usize,
         has_tail_spread: bool,
     ) {
@@ -662,7 +662,7 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
 
     fn push_bit_array_length_check(
         &mut self,
-        subject: Document<'a>,
+        subject: Document,
         expected_bytes: usize,
         has_tail_spread: bool,
     ) {
@@ -676,77 +676,77 @@ impl<'module_ctx, 'expression_gen, 'a> Generator<'module_ctx, 'expression_gen, '
 }
 
 #[derive(Debug)]
-pub struct CompiledPattern<'a> {
-    pub checks: Vec<Check<'a>>,
-    pub assignments: Vec<Assignment<'a>>,
+pub struct CompiledPattern {
+    pub checks: Vec<Check>,
+    pub assignments: Vec<Assignment>,
 }
 
-impl<'a> CompiledPattern<'a> {
+impl CompiledPattern {
     pub fn has_assignments(&self) -> bool {
         !self.assignments.is_empty()
     }
 }
 
 #[derive(Debug)]
-pub struct Assignment<'a> {
-    pub name: &'a str,
-    var: Document<'a>,
-    pub subject: Document<'a>,
-    pub path: Document<'a>,
+pub struct Assignment {
+    pub name: EcoString,
+    var: Document,
+    pub subject: Document,
+    pub path: Document,
 }
 
-impl<'a> Assignment<'a> {
-    pub fn into_doc(self) -> Document<'a> {
+impl Assignment {
+    pub fn into_doc(self) -> Document {
         docvec!["let ", self.var, " = ", self.subject, self.path, ";"]
     }
 }
 
 #[derive(Debug)]
-pub enum Check<'a> {
+pub enum Check {
     Result {
-        subject: Document<'a>,
-        path: Document<'a>,
+        subject: Document,
+        path: Document,
         is_ok: bool,
     },
     Variant {
-        subject: Document<'a>,
-        path: Document<'a>,
-        kind: Document<'a>,
+        subject: Document,
+        path: Document,
+        kind: Document,
     },
     Equal {
-        subject: Document<'a>,
-        path: Document<'a>,
-        to: Document<'a>,
+        subject: Document,
+        path: Document,
+        to: Document,
     },
     ListLength {
-        subject: Document<'a>,
-        path: Document<'a>,
+        subject: Document,
+        path: Document,
         expected_length: usize,
         has_tail_spread: bool,
     },
     BitArrayLength {
-        subject: Document<'a>,
-        path: Document<'a>,
+        subject: Document,
+        path: Document,
         expected_bytes: usize,
         has_tail_spread: bool,
     },
     StringPrefix {
-        subject: Document<'a>,
-        path: Document<'a>,
-        prefix: &'a str,
+        subject: Document,
+        path: Document,
+        prefix: EcoString,
     },
     Booly {
-        subject: Document<'a>,
-        path: Document<'a>,
+        subject: Document,
+        path: Document,
         expected_to_be_truthy: bool,
     },
     Guard {
-        expression: Document<'a>,
+        expression: Document,
     },
 }
 
-impl<'a> Check<'a> {
-    pub fn into_doc(self, match_desired: bool) -> Document<'a> {
+impl Check {
+    pub fn into_doc(self, match_desired: bool) -> Document {
         match self {
             Check::Guard { expression } => {
                 if match_desired {
@@ -836,7 +836,7 @@ impl<'a> Check<'a> {
                 path,
                 prefix,
             } => {
-                let prefix = expression::string(prefix);
+                let prefix = expression::string(prefix.as_str());
                 if match_desired {
                     docvec![subject, path, ".startsWith(", prefix, ")"]
                 } else {
@@ -860,10 +860,10 @@ impl<'a> Check<'a> {
     }
 }
 
-pub(crate) fn assign_subject<'a>(
+pub(crate) fn assign_subject(
     expression_generator: &mut expression::Generator<'_>,
-    subject: &'a TypedExpr,
-) -> (Document<'a>, Option<Document<'a>>) {
+    subject: &TypedExpr,
+) -> (Document, Option<Document>) {
     static ASSIGNMENT_VAR_ECO_STR: OnceLock<EcoString> = OnceLock::new();
 
     match subject {
@@ -883,10 +883,10 @@ pub(crate) fn assign_subject<'a>(
     }
 }
 
-pub(crate) fn assign_subjects<'a>(
+pub(crate) fn assign_subjects(
     expression_generator: &mut expression::Generator<'_>,
-    subjects: &'a [TypedExpr],
-) -> Vec<(Document<'a>, Option<Document<'a>>)> {
+    subjects: &[TypedExpr],
+) -> Vec<(Document, Option<Document>)> {
     let mut out = Vec::with_capacity(subjects.len());
     for subject in subjects {
         out.push(assign_subject(expression_generator, subject))

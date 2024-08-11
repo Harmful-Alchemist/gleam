@@ -3,7 +3,8 @@ use core::hash::Hash;
 use std::{
     borrow::Borrow,
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    cmp::Ordering,
+    collections::HashMap,
     option::Option,
     sync::Arc,
 };
@@ -50,6 +51,10 @@ impl<'a> DecisionTreeGenerator<'a> {
             }
             acc
         });
+        //Patterns and actions seem to be correctly matched here.
+        // dbg!(&actions_and_env[0]);
+        // dbg!(&actions_and_env[1]);
+        // dbg!(&patterns[0]);
 
         // let actions_and_env = self
         //     .clauses
@@ -79,13 +84,32 @@ fn compile_tree(
     assert!(matrix.patterns.iter().all(|ps| ps.len() == p_len));
 
     //Match always succeeds, is_empty uneccesary but clear
+
+    //Two below seem to be going wrong.
+    // dbg!(&matrix.patterns[0]);
+    dbg!(&matrix.actions_and_env.len());
     if matrix.patterns[0].is_empty()
         || matrix.patterns[0].iter().all(|p| match p {
-            Pattern::Discard { .. } => true,
+            Pattern::Discard { .. } | Pattern::Variable { .. } => true, //TODO well I mean...
             _ => false,
         })
     {
-        let (branch, bindings) = matrix.actions_and_env[0].clone();
+        let (branch, mut bindings) = matrix.actions_and_env[0].clone();
+
+        matrix.patterns[0].iter().enumerate().for_each(|(i,p)| {
+            match p {
+                Pattern::Variable { name,.. } => {
+                    if !bindings.contains_key(name) {
+                        let _ = bindings.insert(name.clone(), Binding::Expr(matrix.hs[i].clone())); 
+                    }
+                    // Ok kinda fun but! Should be the tail etc from before! So do get the tags here before somehow that should have the right logic right except if started as list since then newer overwrites, fuck!
+                    // also seems like we get the wrong clause weird!
+                    // .. But never here
+                }
+                _ => (),
+            }
+        });
+
         return Success { branch, bindings };
     }
 
@@ -115,13 +139,25 @@ fn compile_tree(
 
     //2 Identify necessary branches
     let type_ = matrix.hs[i].type_();
-    let mut tags = HashSet::new();
+    let mut tags = Vec::new();
     let type_: &Type = type_.borrow();
+    //TODO check not same case multiple times!
     get_tags(type_, &mut matrix, i, &mut tags, &variant_count);
+    // dbg!(&tags);
 
     //3 Compile the decision sub-trees corresponding to each branch
     let mut cases = Vec::new();
     for tag in &tags {
+        //TODO trying this so ignore earlier stuff, yeah
+        // let mut hs = Vec::new();
+        // let  _ = &matrix.hs[tag_idx..].clone_into(&mut hs);
+
+        // let matrix = PatternMatrix {
+        //     hs,
+        //     patterns,
+        //     actions_and_env,
+        // };
+
         let branch = Box::new(compile_branch(
             i,
             tag,
@@ -136,21 +172,20 @@ fn compile_tree(
             Tag::List {
                 head_element: None,
                 tail: None,
-            } => Case::ConstructorEquality {
-                constructor: "Empty list".into(),
-            },
+            } => Case::EmptyList,
             Tag::List {
                 head_element: _,
                 tail: _,
-            } => Case::ConstructorEquality {
-                constructor: "Cons list".into(),
-            },
+            } => Case::List,
             x => {
                 println!("{x:?}");
                 todo!()
             }
         };
-        cases.push((case, branch));
+        cases.push((case.clone(), branch));
+        if let Case::Default = case {
+            break;
+        }
     }
 
     //4 Assemble into single tree of switch nodes
@@ -164,7 +199,7 @@ fn get_tags(
     type_: &Type,
     matrix: &mut PatternMatrix,
     i: usize,
-    tags: &mut HashSet<Tag>,
+    tags: &mut Vec<Tag>,
     variant_count: &HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
 ) {
     match type_ {
@@ -173,12 +208,14 @@ fn get_tags(
             for row_idx in 0..len {
                 match &matrix.patterns[row_idx][i] {
                     Pattern::Constructor { name, .. } => {
-                        let _ = tags.insert(Tag::Constructor(name.clone()));
+                        let _ = tags.push(Tag::Constructor(name.clone()));
                     }
                     Pattern::Variable { name, .. } => {
                         let val = matrix.hs[i].clone();
-                        let _ = matrix.actions_and_env[row_idx].1.insert(name.clone(), val);
-                        let _ = tags.insert(Tag::T);
+                        // dbg!((name.clone(), Binding::Expr(val.clone())));
+                        // let _ = matrix.actions_and_env[row_idx].1.insert(name.clone(), Binding::Expr(val));
+                        // dbg!(&matrix.actions_and_env[row_idx].1);
+                        let _ = tags.push(Tag::T);
                     }
                     Pattern::List {
                         location,
@@ -187,17 +224,38 @@ fn get_tags(
                         type_,
                     } => {
                         // if elements.len() != 1 {
-                        //     println!("\n{elements:?}\n{tail:?}\n");
+                            // println!("\n{elements:?}\n{tail:?}\n");
+
                         //     todo!();
                         // }
                         if elements.len() == 1 {
-                            let _ = tags.insert(Tag::List {
+                            let _ = tags.push(Tag::List {
                                 head_element: Some(elements[0].clone()),
                                 tail: tail.clone(),
                             });
+                            let name = match &elements[0] {
+                                Pattern::Variable { location, name, type_ } => name.clone(),
+                               _ => todo!()
+                            };
+                            //TODO well we don't heve the list name here right? So we know later....
+                            // dbg!((name.clone(), Binding::ListHead));
+                            // let _ = matrix.actions_and_env[row_idx].1.insert(name.clone(), Binding::ListHead);
+                            // dbg!(&tail);
+                            let tail_name = match tail {
+                                Some(x) => match x.as_ref() {
+                                    Pattern::Variable {  name,..} => {
+                                        name.clone()
+                                    }
+                                    _ => todo!()
+                                },
+                                None => todo!(),
+                            };
+                            // dbg!((name.clone(), Binding::ListTail));
+                            // let _ = matrix.actions_and_env[row_idx].1.insert(tail_name.clone(), Binding::ListTail);
+                            // dbg!(&matrix.actions_and_env[row_idx].1);
                         } else if elements.len() == 0 && tail.is_none() {
                             //Empty list.
-                            let _ = tags.insert(Tag::List {
+                            let _ = tags.push(Tag::List {
                                 head_element: None,
                                 tail: tail.clone(),
                             });
@@ -219,7 +277,7 @@ fn get_tags(
                 if tags.len()
                     != (*variant_count.get(&(module.clone(), name.clone())).unwrap()).len()
                 {
-                    let _ = tags.insert(Tag::T);
+                    let _ = tags.push(Tag::T);
                 }
             } else {
                 // TODO
@@ -236,12 +294,12 @@ fn get_tags(
                     get_tags(type_, matrix, i, tags, variant_count);
                 }
                 _ => {
-                    let _ = tags.insert(Tag::T);
+                    let _ = tags.push(Tag::T);
                 } //Hmm unbound type vars...
             }
         }
         Type::Tuple { .. } => {
-            let _ = tags.insert(Tag::T);
+            let _ = tags.push(Tag::T);
         }
         x => {
             println!("{x:?}");
@@ -265,9 +323,10 @@ fn compile_branch(
     for (j, h) in matrix.hs.iter().enumerate() {
         if i == j {
             // println!("h:\n {h:?}\nt: {tag:?}\n");
+            // dbg!(h);
             match h {
                 TypedExpr::Var { constructor, .. } => {
-                    match tag {
+                    match tag.clone() {
                         Tag::Constructor(c_name) => {
                             //No field map? Nope variant is local variable.
                             let c_t: &Type = constructor.type_.borrow();
@@ -298,7 +357,7 @@ fn compile_branch(
                                                 {
                                                     let label = match &arg.label {
                                                         Some((l, _)) => l.clone(),
-                                                        None => EcoString::new(), //Will this work?
+                                                        None => EcoString::from(format!("{index}")),
                                                     };
                                                     new_matrix.hs.push(TypedExpr::RecordAccess {
                                                         location: h.location(),
@@ -330,7 +389,10 @@ fn compile_branch(
                             // }
                         }
                         Tag::List { head_element, tail } => {
+                            // dbg!(&tag);
                             // println!("{tag:?}");
+                            // dbg!(&head_element);
+                            // dbg!(tail);
                             match (head_element, tail) {
                                 (None, None) => {
                                     //Empty list.
@@ -487,6 +549,7 @@ fn compile_branch(
 
     //f output for expand, could be one loop with above but eh.
     for (row_idx, row) in matrix.patterns.iter().enumerate() {
+        let mut new_actions_and_env = matrix.actions_and_env[row_idx].clone();
         let mut new_row = Vec::new();
         for j in 0..row.len() {
             if i == j {
@@ -549,15 +612,29 @@ fn compile_branch(
                             Tag::List { head_element, tail } => {
                                 match (head_element, tail) {
                                     (None, None) => {
-                                        println!("wrong?");
-                                        continue; //TODO I think this could be wrong....
+                                        // println!("wrong?");
+                                        // continue; //TODO I think this could be wrong....
                                     }
                                     (Some(p), None) => {
                                         new_row.push(p.clone());
                                     }
                                     (Some(p1), Some(p2)) => {
+                                        let name = match p1 {
+                                            Pattern::Variable { location, name, type_ } => name.clone(),
+                                           _ => todo!()
+                                        };
+                                        
+                                        let tail_name = match p2.as_ref() {
+                                                Pattern::Variable {  name,..} => {
+                                                    name.clone()
+                                                }
+                                                _ => todo!()
+                                            
+                                        };
                                         new_row.push(p1.clone());
+                                        let _ = new_actions_and_env.1.insert(name,Binding::ListHead);
                                         new_row.push(p2.as_ref().clone());
+                                        let _ = new_actions_and_env.1.insert(tail_name, Binding::ListTail);
                                     }
                                     _ => panic!(),
                                 }
@@ -603,13 +680,16 @@ fn compile_branch(
             }
         }
         if new_row.len() == new_matrix.hs.len() {
+            new_matrix.actions_and_env.push(new_actions_and_env.clone());
+            //TODO add more bindings here? If they come from the pattern?
             new_matrix.patterns.push(new_row);
         } else {
+            panic!()
             // println!("TODO?"); //I guess my continue was kinda stupid since no row with a continue in that spot is a half finished row...
         }
-        new_matrix
-            .actions_and_env
-            .push(matrix.actions_and_env[row_idx].clone());
+        // new_matrix
+            // .actions_and_env
+            // .push(matrix.actions_and_env[row_idx].clone()); //WHATTTTT about bindings and actions, huh!
     }
 
     // let eq = new_matrix.patterns[0].len() == new_matrix.hs.len();
@@ -621,6 +701,9 @@ fn compile_branch(
     // println!("{eq}");
     // assert!(eq);
 
+    if new_matrix.patterns.len() != new_matrix.actions_and_env.len() {
+        panic!();
+    }
     compile_tree(new_matrix, variant_count)
 }
 
@@ -763,12 +846,22 @@ pub enum DecisionTree {
     Unreachable,
 }
 
-type Bindings = HashMap<EcoString, TypedExpr>; //TypedExpr::Var
+type Bindings = HashMap<EcoString, Binding>; //TypedExpr::Var
 
-#[derive(Debug)]
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Binding {
+    Expr(TypedExpr),
+    ListHead,
+    ListTail
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Case {
     ConstructorEquality { constructor: EcoString }, //TypedExpr::BinOp
     ConstantEquality(EcoString),
+    EmptyList,
+    List,
     Default,
 }
 
@@ -780,7 +873,8 @@ struct PatternMatrix {
     actions_and_env: Vec<(TypedExpr, Bindings)>,
 }
 
-#[derive(Eq, PartialEq, Debug)]
+//TODO remove clone derive
+#[derive(Eq, PartialEq, Debug, Clone)]
 enum Tag {
     T, //catchall
     Constructor(EcoString),
@@ -800,5 +894,21 @@ impl Hash for Tag {
             Tag::Constant(_) => todo!(),
             Tag::List { head_element, tail } => core::mem::discriminant(self).hash(state), //TODO!
         }
+    }
+}
+
+impl Ord for Case {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Case::Default, _) => Ordering::Less,
+            (_, Case::Default) => Ordering::Greater,
+            (_, _) => Ordering::Equal,
+        }
+    }
+}
+
+impl PartialOrd for Case {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }

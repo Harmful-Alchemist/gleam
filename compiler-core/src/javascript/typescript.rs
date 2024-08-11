@@ -20,7 +20,7 @@ use crate::{
     },
     docvec,
     javascript::JavaScriptCodegenTarget,
-    pretty::{break_, Document, Documentable},
+    pretty::{break_str, Document, Documentable},
     type_::{Type, TypeVar},
 };
 use ecow::EcoString;
@@ -32,7 +32,7 @@ use super::{import::Imports, join, line, lines, wrap_args, Output, INDENT};
 /// When rendering a type variable to an TypeScript type spec we need all type
 /// variables with the same id to end up with the same name in the generated
 /// TypeScript. This function converts a usize into base 26 A-Z for this purpose.
-fn id_to_type_var(id: u64) -> Document<'static> {
+fn id_to_type_var(id: u64) -> Document {
     if id < 26 {
         return std::iter::once(
             std::char::from_u32((id % 26 + 65) as u32).expect("id_to_type_var 0"),
@@ -52,11 +52,11 @@ fn id_to_type_var(id: u64) -> Document<'static> {
 }
 
 fn name_with_generics<'a>(
-    name: Document<'a>,
+    name: Document,
     types: impl IntoIterator<Item = &'a Arc<Type>>,
-) -> Document<'a> {
+) -> Document {
     let generic_usages = collect_generic_usages(HashMap::new(), types);
-    let generic_names: Vec<Document<'_>> = generic_usages
+    let generic_names: Vec<Document> = generic_usages
         .keys()
         .map(|id| id_to_type_var(*id))
         .collect();
@@ -120,23 +120,23 @@ fn generic_ids(type_: &Type, ids: &mut HashMap<u64, u64>) {
 
 /// Prints a Gleam tuple in the TypeScript equivalent syntax
 ///
-fn tuple<'a>(elems: impl IntoIterator<Item = Document<'a>>) -> Document<'a> {
-    break_("", "")
-        .append(join(elems, break_(",", ", ")))
+fn tuple<'a>(elems: impl IntoIterator<Item = Document>) -> Document {
+    break_str("", "")
+        .append(join(elems, break_str(",", ", ")))
         .nest(INDENT)
-        .append(break_("", ""))
+        .append(break_str("", ""))
         .surround("[", "]")
         .group()
 }
 
-fn wrap_generic_args<'a, I>(args: I) -> Document<'a>
+fn wrap_generic_args<'a, I>(args: I) -> Document
 where
-    I: IntoIterator<Item = Document<'a>>,
+    I: IntoIterator<Item = Document>,
 {
-    break_("", "")
-        .append(join(args, break_(",", ", ")))
+    break_str("", "")
+        .append(join(args, break_str(",", ", ")))
         .nest(INDENT)
-        .append(break_("", ""))
+        .append(break_str("", ""))
         .surround("<", ">")
         .group()
 }
@@ -191,7 +191,7 @@ impl<'a> TypeScriptGenerator<'a> {
         }
     }
 
-    pub fn compile(&mut self) -> Output<'a> {
+    pub fn compile(&mut self) -> Output {
         let mut imports = self.collect_imports();
         let statements = self
             .module
@@ -227,7 +227,7 @@ impl<'a> TypeScriptGenerator<'a> {
         }
     }
 
-    fn collect_imports(&mut self) -> Imports<'a> {
+    fn collect_imports(&mut self) -> Imports {
         let mut imports = Imports::new();
 
         for statement in &self.module.definitions {
@@ -263,7 +263,7 @@ impl<'a> TypeScriptGenerator<'a> {
     /// "$" symbol to prevent any clashes with other Gleam names that may be
     /// used in this module.
     ///
-    fn register_import(&mut self, imports: &mut Imports<'a>, package: &'a str, module: &'a str) {
+    fn register_import(&mut self, imports: &mut Imports, package: &'a str, module: &'a str) {
         let path = self.import_path(package, module);
         imports.register_module(path, [self.module_name(module)], []);
     }
@@ -290,7 +290,7 @@ impl<'a> TypeScriptGenerator<'a> {
         }
     }
 
-    fn statement(&mut self, statement: &'a TypedDefinition) -> Vec<Output<'a>> {
+    fn statement(&mut self, statement: &'a TypedDefinition) -> Vec<Output> {
         match statement {
             Definition::TypeAlias(TypeAlias {
                 alias,
@@ -335,7 +335,7 @@ impl<'a> TypeScriptGenerator<'a> {
         }
     }
 
-    fn type_alias(&mut self, alias: &str, type_: &Type) -> Output<'a> {
+    fn type_alias(&mut self, alias: &str, type_: &Type) -> Output {
         Ok(docvec![
             "export type ",
             Document::String(ts_safe_type_name(alias.to_string())),
@@ -359,8 +359,8 @@ impl<'a> TypeScriptGenerator<'a> {
         typed_parameters: &'a [Arc<Type>],
         constructors: &'a [TypedRecordConstructor],
         opaque: bool,
-    ) -> Vec<Output<'a>> {
-        let mut definitions: Vec<Output<'_>> = constructors
+    ) -> Vec<Output> {
+        let mut definitions: Vec<Output> = constructors
             .iter()
             .map(|constructor| Ok(self.record_definition(constructor, opaque)))
             .collect();
@@ -374,7 +374,7 @@ impl<'a> TypeScriptGenerator<'a> {
                     x.arguments.iter().map(|a| &a.type_),
                 )
             });
-            join(constructors, break_("| ", " | "))
+            join(constructors, break_str("| ", " | "))
         };
 
         definitions.push(Ok(docvec![
@@ -392,7 +392,7 @@ impl<'a> TypeScriptGenerator<'a> {
         &mut self,
         constructor: &'a TypedRecordConstructor,
         opaque: bool,
-    ) -> Document<'a> {
+    ) -> Document {
         self.set_prelude_used();
         let head = docvec![
             // opaque type constructors are not exposed to JS
@@ -451,7 +451,7 @@ impl<'a> TypeScriptGenerator<'a> {
         docvec![head, class_body, line(), "}"]
     }
 
-    fn module_constant(&mut self, name: &'a str, value: &'a TypedConstant) -> Output<'a> {
+    fn module_constant(&mut self, name: &'a str, value: &'a TypedConstant) -> Output {
         Ok(docvec![
             "export const ",
             super::maybe_escape_identifier_doc(name),
@@ -466,12 +466,12 @@ impl<'a> TypeScriptGenerator<'a> {
         name: &'a str,
         args: &'a [TypedArg],
         return_type: &'a Arc<Type>,
-    ) -> Output<'a> {
+    ) -> Output {
         let generic_usages = collect_generic_usages(
             HashMap::new(),
             std::iter::once(return_type).chain(args.iter().map(|a| &a.type_)),
         );
-        let generic_names: Vec<Document<'_>> = generic_usages
+        let generic_names: Vec<Document> = generic_usages
             .iter()
             .filter(|(_id, use_count)| **use_count > 1)
             .sorted_by_key(|x| x.0)
@@ -513,7 +513,7 @@ impl<'a> TypeScriptGenerator<'a> {
 
     /// Converts a Gleam type into a TypeScript type string
     ///
-    pub fn print_type(&mut self, type_: &Type) -> Document<'static> {
+    pub fn print_type(&mut self, type_: &Type) -> Document {
         self.do_print(type_, None)
     }
 
@@ -524,7 +524,7 @@ impl<'a> TypeScriptGenerator<'a> {
         &mut self,
         type_: &Type,
         generic_usages: &HashMap<u64, u64>,
-    ) -> Document<'static> {
+    ) -> Document {
         self.do_print(type_, Some(generic_usages))
     }
 
@@ -553,7 +553,7 @@ impl<'a> TypeScriptGenerator<'a> {
         &mut self,
         type_: &Type,
         generic_usages: Option<&HashMap<u64, u64>>,
-    ) -> Document<'static> {
+    ) -> Document {
         match type_ {
             Type::Var { type_: typ } => self.print_var(&typ.borrow(), generic_usages, false),
 
@@ -571,7 +571,7 @@ impl<'a> TypeScriptGenerator<'a> {
         }
     }
 
-    fn do_print_force_generic_param(&mut self, type_: &Type) -> Document<'static> {
+    fn do_print_force_generic_param(&mut self, type_: &Type) -> Document {
         match type_ {
             Type::Var { type_: typ } => self.print_var(&typ.borrow(), None, true),
 
@@ -594,7 +594,7 @@ impl<'a> TypeScriptGenerator<'a> {
         type_: &TypeVar,
         generic_usages: Option<&HashMap<u64, u64>>,
         force_generic_id: bool,
-    ) -> Document<'static> {
+    ) -> Document {
         match type_ {
             TypeVar::Unbound { id } | TypeVar::Generic { id } => match &generic_usages {
                 Some(usages) => match usages.get(id) {
@@ -624,7 +624,7 @@ impl<'a> TypeScriptGenerator<'a> {
         name: &str,
         args: &[Arc<Type>],
         generic_usages: Option<&HashMap<u64, u64>>,
-    ) -> Document<'static> {
+    ) -> Document {
         match name {
             "Nil" => "undefined".to_doc(),
             "Int" | "Float" => "number".to_doc(),
@@ -667,7 +667,7 @@ impl<'a> TypeScriptGenerator<'a> {
         args: &[Arc<Type>],
         module: &str,
         generic_usages: Option<&HashMap<u64, u64>>,
-    ) -> Document<'static> {
+    ) -> Document {
         let name = format!("{}$", ts_safe_type_name(name.to_string()));
         let name = match module == self.module.name {
             true => Document::String(name),
@@ -699,7 +699,7 @@ impl<'a> TypeScriptGenerator<'a> {
         args: &[Arc<Type>],
         retrn: &Type,
         generic_usages: Option<&HashMap<u64, u64>>,
-    ) -> Document<'static> {
+    ) -> Document {
         docvec![
             wrap_args(args.iter().enumerate().map(|(idx, a)| docvec![
                 "x",

@@ -5,8 +5,8 @@ use super::*;
 pub(super) fn pattern<'a>(
     p: &'a TypedPattern,
     env: &mut Env<'a>,
-    guards: &mut Vec<Document<'a>>,
-) -> Document<'a> {
+    guards: &mut Vec<Document>,
+) -> Document {
     let mut vars = vec![];
     to_doc(p, &mut vars, env, guards)
 }
@@ -16,8 +16,8 @@ fn print<'a>(
     vars: &mut Vec<&'a str>,
     define_variables: bool,
     env: &mut Env<'a>,
-    guards: &mut Vec<Document<'a>>,
-) -> Document<'a> {
+    guards: &mut Vec<Document>,
+) -> Document {
     match p {
         Pattern::Assign {
             name, pattern: p, ..
@@ -150,8 +150,8 @@ pub(super) fn to_doc<'a>(
     p: &'a TypedPattern,
     vars: &mut Vec<&'a str>,
     env: &mut Env<'a>,
-    guards: &mut Vec<Document<'a>>,
-) -> Document<'a> {
+    guards: &mut Vec<Document>,
+) -> Document {
     print(p, vars, true, env, guards)
 }
 
@@ -159,8 +159,8 @@ pub(super) fn to_doc_discarding_all<'a>(
     p: &'a TypedPattern,
     vars: &mut Vec<&'a str>,
     env: &mut Env<'a>,
-    guards: &mut Vec<Document<'a>>,
-) -> Document<'a> {
+    guards: &mut Vec<Document>,
+) -> Document {
     print(p, vars, false, env, guards)
 }
 
@@ -170,8 +170,8 @@ fn tag_tuple_pattern<'a>(
     vars: &mut Vec<&'a str>,
     define_variables: bool,
     env: &mut Env<'a>,
-    guards: &mut Vec<Document<'a>>,
-) -> Document<'a> {
+    guards: &mut Vec<Document>,
+) -> Document {
     if args.is_empty() {
         atom_string(name.to_snake_case())
     } else {
@@ -190,8 +190,8 @@ fn pattern_segment<'a>(
     vars: &mut Vec<&'a str>,
     define_variables: bool,
     env: &mut Env<'a>,
-    guards: &mut Vec<Document<'a>>,
-) -> Document<'a> {
+    guards: &mut Vec<Document>,
+) -> Document {
     let document = match value {
         // Skip the normal <<value/utf8>> surrounds
         Pattern::String { value, .. } => value.to_doc().surround("\"", "\""),
@@ -224,13 +224,13 @@ fn pattern_list<'a>(
     vars: &mut Vec<&'a str>,
     define_variables: bool,
     env: &mut Env<'a>,
-    guards: &mut Vec<Document<'a>>,
-) -> Document<'a> {
+    guards: &mut Vec<Document>,
+) -> Document {
     let elements = join(
         elements
             .iter()
             .map(|e| print(e, vars, define_variables, env, guards)),
-        break_(",", ", "),
+        break_str(",", ", "),
     );
     let tail = tail.map(|tail| print(tail, vars, define_variables, env, guards));
     list(elements, tail)
