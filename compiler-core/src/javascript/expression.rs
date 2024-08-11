@@ -647,8 +647,8 @@ impl<'module> Generator<'module> {
                             // Type::Var { type_ } => todo!(),
                             // Type::Tuple { elems } => todo!(),
                         },
-                        Binding::ListHead => {binds.push(docvec!("let ", binding.0.clone(), "= REPLACEME.head;", line()))},
-                        Binding::ListTail => {binds.push(docvec!("let ", binding.0.clone(), "= REPLACEME.tail;", line()))},
+                        Binding::ListHead(list_name) => {binds.push(docvec!("let ", binding.0.clone(), "= ", list_name,".head;", line()))},
+                        Binding::ListTail(list_name) => {binds.push(docvec!("let ", binding.0.clone(), "= ", list_name,".tail;", line()))},
                         _ => todo!(),
                     };
                     // let d = self.assignment(constructor)?;

@@ -87,7 +87,7 @@ fn compile_tree(
 
     //Two below seem to be going wrong.
     // dbg!(&matrix.patterns[0]);
-    dbg!(&matrix.actions_and_env.len());
+    // dbg!(&matrix.actions_and_env.len());
     if matrix.patterns[0].is_empty()
         || matrix.patterns[0].iter().all(|p| match p {
             Pattern::Discard { .. } | Pattern::Variable { .. } => true, //TODO well I mean...
@@ -461,11 +461,11 @@ fn compile_branch(
     }
 
     //f output for expand, could be one loop with above but eh.
-    for (row_idx, row) in matrix.patterns.iter().enumerate() {
+    'row: for (row_idx, row) in matrix.patterns.iter().enumerate() {
         let mut new_actions_and_env = matrix.actions_and_env[row_idx].clone();
-        dbg!(&new_actions_and_env.0);
+        // dbg!(&new_actions_and_env.0);
         let mut new_row = Vec::new();
-        for j in 0..row.len() {
+        'pattern: for j in 0..row.len() {
             if i == j {
                 //TODO env!?
                 let p = &matrix.patterns[row_idx][j];
@@ -521,18 +521,20 @@ fn compile_branch(
                             _ => todo!(),
                         }
                     }
-                    Pattern::List { .. } => {
+                    Pattern::List { elements: pattern_elements, tail: pattern_tail, .. } => {
+                        // dbg!(&tag);
                         match tag {
                             Tag::List { head_element, tail } => {
-                                match (head_element, tail) {
-                                    (None, None) => {
+                                match (head_element, tail, pattern_tail) {
+                                    (None, None, None) => {
                                         // println!("wrong?");
                                         // continue; //TODO I think this could be wrong....
+                                        // break;
                                     }
-                                    (Some(p), None) => {
+                                    (Some(p), None, None) => {
                                         new_row.push(p.clone());
                                     }
-                                    (Some(p1), Some(p2)) => {
+                                    (Some(p1), Some(p2), Some(_)) => {
                                         let name = match p1 {
                                             Pattern::Variable { location, name, type_ } => name.clone(),
                                            _ => todo!()
@@ -546,11 +548,18 @@ fn compile_branch(
                                             
                                         };
                                         new_row.push(p1.clone());
-                                        let _ = new_actions_and_env.1.insert(name,Binding::ListHead);
+                                        let list_name = match &matrix.hs[i] {
+                                           
+                                            TypedExpr::Var { name, .. } => name.clone(),
+                                            _ => panic!()
+                                    
+                                        };
+                                        let _ = new_actions_and_env.1.insert(name,Binding::ListHead(list_name.clone()));
                                         new_row.push(p2.as_ref().clone());
-                                        let _ = new_actions_and_env.1.insert(tail_name, Binding::ListTail);
-                                    }
-                                    _ => panic!(),
+                                        let _ = new_actions_and_env.1.insert(tail_name, Binding::ListTail(list_name));
+                                    },
+                                    _ => continue 'row //Skip the row
+                                    // _ => panic!(),
                                 }
                             }
                             _ => continue,
@@ -766,8 +775,8 @@ type Bindings = HashMap<EcoString, Binding>; //TypedExpr::Var
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Binding {
     Expr(TypedExpr),
-    ListHead,
-    ListTail
+    ListHead(EcoString),
+    ListTail(EcoString),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
