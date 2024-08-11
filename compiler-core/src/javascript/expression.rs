@@ -627,12 +627,37 @@ impl<'module> Generator<'module> {
                 // dbg!(&bindings);
                 for binding in bindings {
                     match &binding.1 {
-                        Binding::Expr(TypedExpr::Var {
-                            location,
-                            constructor,
-                            name,
-                        }) => {
-                            binds.push(docvec!("let ",binding.0.clone()," = ",name,";",line()));
+                        Binding::Expr(expr) => {
+                            match expr {
+                                TypedExpr::Var {
+                                    location,
+                                    constructor,
+                                    name,
+                                } => binds.push(docvec!(
+                                    "let ",
+                                    binding.0.clone(),
+                                    " = ",
+                                    name,
+                                    ";",
+                                    line()
+                                )),
+                                TypedExpr::RecordAccess {
+                                    location,
+                                    typ,
+                                    label,
+                                    index,
+                                    record,
+                                } => binds.push(docvec!(
+                                    "let ",
+                                    binding.0.clone(),
+                                    " = ",
+                                    self.tuple_index(record, *index)?,
+                                    ";",
+                                    line()
+                                )),
+                                _ => todo!(),
+                            }
+
                             // let var_name = name;
                             // match constructor.type_.borrow() {
                             // Type::Named { name, .. } => {
@@ -646,10 +671,23 @@ impl<'module> Generator<'module> {
                             // Type::Fn { args, retrn } => todo!(),
                             // Type::Var { type_ } => todo!(),
                             // Type::Tuple { elems } => todo!(),
-                        },
-                        Binding::ListHead(list_name) => {binds.push(docvec!("let ", binding.0.clone(), "= ", list_name,".head;", line()))},
-                        Binding::ListTail(list_name) => {binds.push(docvec!("let ", binding.0.clone(), "= ", list_name,".tail;", line()))},
-                        _ => todo!(),
+                        }
+                        Binding::ListHead(list_name) => binds.push(docvec!(
+                            "let ",
+                            binding.0.clone(),
+                            "= ",
+                            list_name,
+                            ".head;",
+                            line()
+                        )),
+                        Binding::ListTail(list_name) => binds.push(docvec!(
+                            "let ",
+                            binding.0.clone(),
+                            "= ",
+                            list_name,
+                            ".tail;",
+                            line()
+                        )),
                     };
                     // let d = self.assignment(constructor)?;
                     // binds.push(d);
