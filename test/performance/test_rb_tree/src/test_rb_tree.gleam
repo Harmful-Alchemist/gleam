@@ -12,8 +12,8 @@ pub fn main() {
   ]
 
   map(cases, balance_tuple)
-  let f = fn(x) { x }
-  map_acc([], f, [])
+  // let f = fn(x) { x }
+  // map_acc([], f, [])
 }
 
 pub type Color {
@@ -51,8 +51,9 @@ fn map(xs, f) {
 
 fn map_acc(xs, f, acc) {
   case xs {
-    [] -> acc
+    
     [x, ..ys] -> map_acc(ys, f, [f(x), ..acc])
+    [] -> acc
     // _ -> acc TODO!
   }
 }

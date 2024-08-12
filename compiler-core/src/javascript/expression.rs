@@ -569,7 +569,7 @@ impl<'module> Generator<'module> {
     }
 
     // TODO switch the feature switches again!
-    #[cfg(not(feature = "decisiontree"))]
+    #[cfg(feature = "decisiontree")]
     fn case<'a>(&mut self, subject_values: &'a [TypedExpr], clauses: &'a [TypedClause]) -> Output {
         // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.
         let (subjects, subject_assignments): (Vec<_>, Vec<_>) =
@@ -785,7 +785,7 @@ impl<'module> Generator<'module> {
                         todo!()
                     } // x => self.expression(&x)?
                 };
-                docvec!(start, "!", var, ") {", line(), processed_tree, line(), "}")
+                docvec!(start, var,".hasLength(0)", ") {", line(), processed_tree, line(), "}")
             }
             Case::List => {
                 let start = if first { "if (" } else { "else if (" };
@@ -807,7 +807,8 @@ impl<'module> Generator<'module> {
                         todo!()
                     } // x => self.expression(&x)?
                 };
-                docvec!(start, var, ") {", line(), processed_tree, line(), "}")
+                //TODO wrong
+                docvec!(start, var, ".atLeastLength(1)", ") {", line(), processed_tree, line(), "}")
             }
             Case::Default => todo!(),
         };
@@ -815,7 +816,7 @@ impl<'module> Generator<'module> {
         Ok(docvec![check].force_break())
     }
 
-    #[cfg(feature = "decisiontree")]
+    #[cfg(not(feature = "decisiontree"))]
     fn case<'a>(&mut self, subject_values: &'a [TypedExpr], clauses: &'a [TypedClause]) -> Output {
         // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.
         let (subjects, subject_assignments): (Vec<_>, Vec<_>) =

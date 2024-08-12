@@ -1,8 +1,9 @@
+const treeFeature = Deno.args[0] === "true";
+console.log(`Using decision trees: ${treeFeature}`);
+
 Deno.bench("Matching RBTs", async (b) => {
     const projectPath = "./test_rb_tree/";
-    const treeFeature = Deno.args[0] === "true";
-    console.log(treeFeature);
-
+    
     try {
         await Deno.remove("./test_rb_tree/build/", { recursive: true });
     } catch (err) {
@@ -35,5 +36,5 @@ Deno.bench("Matching RBTs", async (b) => {
     b.start();
     const huh = jsCode.main();
     b.end();
-    console.log(huh.head["0"]);
+    // console.log(huh);
 });
