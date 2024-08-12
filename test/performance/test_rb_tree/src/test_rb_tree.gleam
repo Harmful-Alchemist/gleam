@@ -35,6 +35,10 @@ fn balance(c, v, t1, t2) {
       Node(Red, y, Node(Black, x, a, b), Node(Black, z, c, d))
     a, b, c, d -> Node(a, b, c, d)
   }
+  // case t1 {
+  //   Node(Red, y, Node(Red, x, a, b), c) -> 1 //Ah cool already wrong!
+  //   r -> 2
+  // }
 }
 
 fn balance_tuple(x: #(Color, t, RBT(t), RBT(t))) {

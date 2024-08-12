@@ -167,7 +167,12 @@ impl<'module> Generator<'module> {
             TypedExpr::Call { fun, args, .. } => self.call(fun, args),
             TypedExpr::Fn { args, body, .. } => self.fn_(args, body),
 
-            TypedExpr::RecordAccess { record, label, .. } => self.record_access(record, label),
+            TypedExpr::RecordAccess {
+                record,
+                label,
+                index,
+                ..
+            } => self.tuple_index(record, *index), // TODO change to tuple accesses in dec tree? self.record_access(record, label),
             TypedExpr::RecordUpdate { spread, args, .. } => self.record_update(spread, args),
 
             TypedExpr::Var {
@@ -774,7 +779,7 @@ impl<'module> Generator<'module> {
                         label,
                         index,
                         record,
-                    } => self.record_access(&record, &label)?,
+                    } => self.tuple_index(&record, index)?,
                     x => {
                         dbg!(&x);
                         todo!()
@@ -796,7 +801,7 @@ impl<'module> Generator<'module> {
                         label,
                         index,
                         record,
-                    } => self.record_access(&record, &label)?,
+                    } => self.tuple_index(&record, index)?,
                     x => {
                         dbg!(&x);
                         todo!()

@@ -303,6 +303,7 @@ fn compile_branch(
         actions_and_env: Vec::new(),
     };
     // H output expand
+    // dbg!(&tag);
     for (j, h) in matrix.hs.iter().enumerate() {
         if i == j {
             // println!("h:\n {h:?}\nt: {tag:?}\n");
@@ -314,6 +315,8 @@ fn compile_branch(
                             //No field map? Nope variant is local variable.
                             let c_t: &Type = constructor.type_.borrow();
                             // println!("constructor: {constructor:?}\nconstructor type {c_t:?}\n");
+                            // if any in column are constructor pattern at i! else make it empty! But hs alrady too short wtf
+                            // patterns is too long........ TODO! Was adding too many lol
                             match c_t {
                                 Type::Var { type_ } => {
                                     let type_: &RefCell<TypeVar> = type_.borrow();
@@ -330,11 +333,15 @@ fn compile_branch(
                                                 let constructors = variant_count
                                                     .get(&(module.clone(), name.clone()))
                                                     .unwrap();
-
+                                                // dbg!(&module);
+                                                // dbg!(&name);
+                                                // dbg!(&c_name);
                                                 let constructor = constructors
                                                     .iter()
                                                     .find(|c| c.name.as_str() == c_name.as_str())
                                                     .unwrap();
+                                                // dbg!(&constructor.arguments.len());
+                                                // dbg!(&constructor);
                                                 for (index, arg) in
                                                     constructor.arguments.iter().enumerate()
                                                 {
@@ -342,6 +349,7 @@ fn compile_branch(
                                                         Some((l, _)) => l.clone(),
                                                         None => EcoString::from(format!("{index}")),
                                                     };
+                                                    // dbg!(&label);
                                                     new_matrix.hs.push(TypedExpr::RecordAccess {
                                                         location: h.location(),
                                                         typ: arg.type_.clone(),
@@ -358,18 +366,6 @@ fn compile_branch(
                                 }
                                 _ => todo!(),
                             }
-                            // if let Some(map) = constructor.field_map() {
-                            //     println!("fieldmap: {map:?}");
-                            //     for (field_name, idx) in map.fields.iter() {
-                            //         new_matrix.hs.push(TypedExpr::RecordAccess {
-                            //             location: h.location(),
-                            //             typ: h.type_(), //TODO does not make sense but type checking was done so why care? If we have to declare typed locals maybe based on this.
-                            //             label: field_name.clone(),
-                            //             index: *idx as u64,
-                            //             record: Box::new(h.clone()),
-                            //         });
-                            //     }
-                            // }
                         }
                         Tag::List { head_element, tail } => {
                             // dbg!(&tag);
@@ -443,7 +439,10 @@ fn compile_branch(
                             }
                         }
                         Tag::T => {
-                            () //Do nothing? TODO could be wrong! Bu I think right
+                            //() //Do nothing? TODO could be wrong! Bu I think right
+                            // No h for this column.
+                            // dbg!("T hs");
+                            continue;
                         }
                         t => {
                             println!("{t:?}");
@@ -456,7 +455,194 @@ fn compile_branch(
                         new_matrix.hs.push(elem.clone());
                     }
                 }
-                _ => (), //TODO could be too little matching going on here?
+                TypedExpr::RecordAccess {
+                    location,
+                    typ,
+                    label,
+                    index,
+                    record,
+                } => {
+                    match tag.clone() {
+                        Tag::Constructor(c_name) => {
+                            //No field map? Nope variant is local variable.
+                            let c_t: &Type = typ.borrow();
+                            // println!("constructor: {constructor:?}\nconstructor type {c_t:?}\n");
+                            // if any in column are constructor pattern at i! else make it empty! But hs alrady too short wtf
+                            // patterns is too long........ TODO! Was adding too many lol
+                            match c_t {
+                                Type::Var { type_ } => {
+                                    let type_: &RefCell<TypeVar> = type_.borrow();
+                                    let type_: &TypeVar = &*type_.borrow();
+                                    match type_ {
+                                        TypeVar::Link { type_ } => match type_.borrow() {
+                                            Type::Named {
+                                                publicity,
+                                                package,
+                                                module,
+                                                name,
+                                                args,
+                                            } => {
+                                                let constructors = variant_count
+                                                    .get(&(module.clone(), name.clone()))
+                                                    .unwrap();
+                                                dbg!(&module);
+                                                dbg!(&name);
+                                                dbg!(&c_name);
+                                                let constructor = constructors
+                                                    .iter()
+                                                    .find(|c| c.name.as_str() == c_name.as_str())
+                                                    .unwrap();
+                                                // dbg!(&constructor.arguments.len());
+                                                // dbg!(&constructor);
+                                                for (index, arg) in
+                                                    constructor.arguments.iter().enumerate()
+                                                {
+                                                    let label = match &arg.label {
+                                                        Some((l, _)) => l.clone(),
+                                                        None => EcoString::from(format!("{index}")),
+                                                    };
+                                                    // dbg!(&label);
+                                                    new_matrix.hs.push(TypedExpr::RecordAccess {
+                                                        location: h.location(),
+                                                        typ: arg.type_.clone(),
+                                                        label,
+                                                        index: index as u64,
+                                                        record: Box::new(h.clone()),
+                                                    });
+                                                }
+                                            }
+                                            _ => todo!(),
+                                        },
+                                        _ => todo!(),
+                                    }
+                                }
+                                Type::Named {
+                                    publicity,
+                                    package,
+                                    module,
+                                    name,
+                                    args,
+                                } => {
+                                    //TODO waaaaay too duplicated from above!
+                                    let constructors =
+                                        variant_count.get(&(module.clone(), name.clone())).unwrap();
+                                    // dbg!(&module);
+                                    // dbg!(&name);
+                                    // dbg!(&c_name);
+                                    let constructor = constructors
+                                        .iter()
+                                        .find(|c| c.name.as_str() == c_name.as_str())
+                                        .unwrap();
+                                    // dbg!(&constructor.arguments.len());
+                                    // dbg!(&constructor);
+                                    for (index, arg) in constructor.arguments.iter().enumerate() {
+                                        let label = match &arg.label {
+                                            Some((l, _)) => l.clone(),
+                                            None => EcoString::from(format!("{index}")),
+                                        };
+                                        // dbg!(&label);
+                                        new_matrix.hs.push(TypedExpr::RecordAccess {
+                                            location: h.location(),
+                                            typ: arg.type_.clone(),
+                                            label,
+                                            index: index as u64,
+                                            record: Box::new(h.clone()),
+                                        });
+                                    }
+                                }
+                                x => {
+                                    dbg!(x);
+                                    todo!()
+                                }
+                            }
+                        }
+                        Tag::List { head_element, tail } => {
+                            // dbg!(&tag);
+                            // println!("{tag:?}");
+                            // dbg!(&head_element);
+                            // dbg!(tail);
+                            match (head_element, tail) {
+                                (None, None) => {
+                                    //Empty list.
+                                    // one columns jus head?
+                                    // println!("elem no tail! {head_element:?}");
+                                    continue;
+                                }
+                                (Some(_), None) => {
+                                    // println!("elem! {head_element:?}");
+                                    // two columns, head and tail of subject value at i old
+                                    match &matrix.hs[i] {
+                                        TypedExpr::List { elements, .. } => {
+                                            println!("This ok then?");
+                                            new_matrix.hs.push(elements[0].clone());
+                                        }
+                                        _ => panic!(), //well now
+                                    }
+                                }
+                                (Some(p1), Some(p2)) => {
+                                    let p2 = p2.as_ref();
+                                    match (p1, p2) {
+                                        (
+                                            Pattern::Variable {
+                                                location: loc1,
+                                                name: name1,
+                                                type_: type1,
+                                            },
+                                            Pattern::Variable {
+                                                location: loc2,
+                                                name: name2,
+                                                type_: type2,
+                                            },
+                                        ) => {
+                                            new_matrix.hs.push(TypedExpr::Var {
+                                                location: loc1.clone(),
+                                                constructor: ValueConstructor {
+                                                    publicity: Publicity::Internal,
+                                                    deprecation: Deprecation::NotDeprecated,
+                                                    variant:
+                                                        ValueConstructorVariant::LocalVariable {
+                                                            location: loc1.clone(),
+                                                        },
+                                                    type_: type1.clone(),
+                                                },
+                                                name: name1.clone(),
+                                            });
+                                            new_matrix.hs.push(TypedExpr::Var {
+                                                location: loc2.clone(),
+                                                constructor: ValueConstructor {
+                                                    publicity: Publicity::Internal,
+                                                    deprecation: Deprecation::NotDeprecated,
+                                                    variant:
+                                                        ValueConstructorVariant::LocalVariable {
+                                                            location: loc2.clone(),
+                                                        },
+                                                    type_: type2.clone(),
+                                                },
+                                                name: name2.clone(),
+                                            });
+                                        }
+                                        (_, _) => panic!(),
+                                    }
+                                }
+                                _ => panic!(),
+                            }
+                        }
+                        Tag::T => {
+                            //() //Do nothing? TODO could be wrong! Bu I think right
+                            // No h for this column.
+                            // dbg!("T hs");
+                            continue;
+                        }
+                        t => {
+                            println!("{t:?}");
+                            todo!()
+                        }
+                    }
+                }
+                x => {
+                    dbg!(x);
+                    todo!()
+                }
             }
         } else {
             new_matrix.hs.push(h.clone())
@@ -471,94 +657,96 @@ fn compile_branch(
         'pattern: for j in 0..row.len() {
             if i == j {
                 //TODO env!?
-                let p = &matrix.patterns[row_idx][j];
+                // let p = &matrix.patterns[row_idx][j];
+                // dbg!(p);
                 // println!("p:\n {p:?}\n");
                 match &matrix.patterns[row_idx][j] {
                     // Pattern::Int { location, value } => todo!(),
                     // Pattern::Float { location, value } => todo!(),
                     // Pattern::String { location, value } => todo!(),
+                    //TODO variable and discard should be same.....
                     Pattern::Variable {
                         location,
                         name,
                         type_,
-                    } => match &matrix.hs[j] {
-                        TypedExpr::Var { constructor, .. } => match tag {
-                            Tag::Constructor(c_name) => {
-                                let (module, name) = match constructor.type_.borrow() {
-                                    Type::Named { name, module, .. } => {
-                                        (module.clone(), name.clone())
-                                    }
-                                    Type::Var { type_ } => {
-                                        let type_: &RefCell<TypeVar> = type_.borrow();
-                                        let type_: &TypeVar = &*type_.borrow();
-                                        match type_ {
-                                            TypeVar::Unbound { id } => todo!(),
-                                            TypeVar::Link { type_ } => match type_.borrow() {
-                                                Type::Named {
-                                                    publicity,
-                                                    package,
-                                                    module,
-                                                    name,
-                                                    args,
-                                                } => (module.clone(), name.clone()),
-                                                Type::Fn { args, retrn } => todo!(),
-                                                Type::Var { type_ } => todo!(),
-                                                Type::Tuple { elems } => todo!(),
-                                            },
-                                            TypeVar::Generic { id } => todo!(),
+                    } => {
+                        match &matrix.hs[j] {
+                            TypedExpr::Var { constructor, .. } => match tag {
+                                Tag::Constructor(c_name) => {
+                                    let (module, name) = match constructor.type_.borrow() {
+                                        Type::Named { name, module, .. } => {
+                                            (module.clone(), name.clone())
                                         }
-                                    }
-                                    oops => {
-                                        dbg!(oops);
-                                        todo!()
-                                    }
-                                };
-                                dbg!(&name);
-                                dbg!(&module);
-                                dbg!(&variant_count);
-                                let constructors =
-                                    variant_count.get(&(module.clone(), name.clone())).unwrap();
+                                        Type::Var { type_ } => {
+                                            let type_: &RefCell<TypeVar> = type_.borrow();
+                                            let type_: &TypeVar = &*type_.borrow();
+                                            match type_ {
+                                                TypeVar::Unbound { id } => todo!(),
+                                                TypeVar::Link { type_ } => match type_.borrow() {
+                                                    Type::Named {
+                                                        publicity,
+                                                        package,
+                                                        module,
+                                                        name,
+                                                        args,
+                                                    } => (module.clone(), name.clone()),
+                                                    Type::Fn { args, retrn } => todo!(),
+                                                    Type::Var { type_ } => todo!(),
+                                                    Type::Tuple { elems } => todo!(),
+                                                },
+                                                TypeVar::Generic { id } => todo!(),
+                                            }
+                                        }
+                                        _ => {
+                                            // dbg!(oops);
+                                            todo!()
+                                        }
+                                    };
 
-                                let constructor = constructors
-                                    .iter()
-                                    .find(|c| c.name.as_str() == c_name.as_str())
-                                    .unwrap();
-                                for arg in &constructor.arguments {
-                                    new_row.push(Pattern::Discard {
-                                        name: EcoString::new(),
-                                        location: location.clone(),
-                                        type_: arg.type_.clone(),
-                                    });
+                                    let constructors =
+                                        variant_count.get(&(module.clone(), name.clone())).unwrap();
+
+                                    let constructor = constructors
+                                        .iter()
+                                        .find(|c| c.name.as_str() == c_name.as_str())
+                                        .unwrap();
+                                    for arg in &constructor.arguments {
+                                        new_row.push(Pattern::Discard {
+                                            name: EcoString::new(),
+                                            location: location.clone(),
+                                            type_: arg.type_.clone(),
+                                        });
+                                    }
                                 }
+                                Tag::T => {
+                                    // No new pattern!
+                                    //But what about the corresponding h? An hs per row?
+                                    continue 'pattern;
+                                    // Just nothing? Sure it's the default
+                                }
+                                _ => todo!(),
+                            },
+                            TypedExpr::RecordAccess {
+                                location,
+                                typ,
+                                label,
+                                index,
+                                record,
+                            } => {
+                                // new_row.push(Pattern::Discard {
+                                //     name: EcoString::new(),
+                                //     location: location.clone(),
+                                //     type_: typ.clone(),
+                                // });
+                                //TODO  How many depends on type, else put above back
+                                todo!()
                             }
-                            Tag::T => {
-                                new_row.push(Pattern::Discard {
-                                    name: EcoString::new(),
-                                    location: location.clone(),
-                                    type_: constructor.type_.clone(),
-                                });
+                            e => {
+                                dbg!(e);
+                                todo!()
                             }
-                            _ => todo!(),
-                        },
-                        TypedExpr::RecordAccess {
-                            location,
-                            typ,
-                            label,
-                            index,
-                            record,
-                        } => {
-                            //TODO why is this there twice? This match hmmm, also is it even correct?
-                            new_row.push(Pattern::Discard {
-                                name: EcoString::new(),
-                                location: location.clone(),
-                                type_: typ.clone(),
-                            });
                         }
-                        e => {
-                            dbg!(e);
-                            todo!()
-                        }
-                    },
+                    }
                     // Pattern::VarUsage { location, name, constructor, type_ } => todo!(),
                     // Pattern::Assign { name, location, pattern } => todo!(),
                     Pattern::Discard {
@@ -588,9 +776,11 @@ fn compile_branch(
                                         });
                                     }
                                 }
+                                Tag::T => {
+                                    continue 'pattern;
+                                }
                                 _ => {
                                     todo!();
-                                    continue;
                                 }
                             },
                             TypedExpr::Tuple { elems, .. } => {
@@ -609,12 +799,65 @@ fn compile_branch(
                                 index,
                                 record,
                             } => {
+                                // dbg!("me?");
                                 //TODO I guess?
-                                new_row.push(Pattern::Discard {
-                                    name: EcoString::new(),
-                                    location: location.clone(),
-                                    type_: typ.clone(),
-                                });
+                                // new_row.push(Pattern::Discard {
+                                //     name: EcoString::new(),
+                                //     location: location.clone(),
+                                //     type_: typ.clone(),
+                                // });
+                                match tag.clone() {
+                                    Tag::Constructor(c_name) => {
+                                        let (module, name) = match typ.borrow() {
+                                            Type::Named {
+                                                publicity,
+                                                package,
+                                                module,
+                                                name,
+                                                args,
+                                            } => (module.clone(), name.clone()),
+                                            _ => todo!(),
+                                        };
+
+                                        let constructors = variant_count
+                                            .get(&(module.clone(), name.clone()))
+                                            .unwrap();
+
+                                        let constructor = constructors
+                                            .iter()
+                                            .find(|c| c.name.as_str() == c_name.as_str())
+                                            .unwrap();
+                                        for arg in &constructor.arguments {
+                                            new_row.push(Pattern::Discard {
+                                                name: EcoString::new(),
+                                                location: location.clone(),
+                                                type_: arg.type_.clone(),
+                                            });
+                                        }
+                                    }
+                                    Tag::T => {
+                                        // dbg!(typ);
+                                        // match typ.borrow() {
+                                        //     Type::Named { args, .. } => {
+                                        //         for arg in args {
+                                        //             new_row.push(Pattern::Discard {
+                                        //                 name: EcoString::new(),
+                                        //                 location: location.clone(),
+                                        //                 type_: arg.clone(),
+                                        //             });
+                                        //         }
+                                        //     }
+                                        //     t => {dbg!(t);todo!()},
+                                        // }
+                                        continue 'pattern;
+                                    }
+                                    tag => {
+                                        dbg!(tag);
+                                        todo!()
+                                    }
+                                }
+
+                                // continue 'pattern;
                             }
                             e => {
                                 dbg!(e);
@@ -684,19 +927,19 @@ fn compile_branch(
                     } => match tag {
                         Tag::Constructor(ref c_name) => {
                             if c_name == name {
+                                //TODO check are the call args complete?
                                 for argument in arguments {
                                     new_row.push(argument.value.clone());
                                 }
                             } else {
-                                continue;
+                                continue 'row; //Skip the row
                             }
                         }
                         Tag::T => {
-                            continue;
+                            continue 'row; //skip the row
                         }
                         _ => {
                             todo!();
-                            continue;
                         }
                     },
                     // Pattern::Tuple { location, elems } => todo!(),
@@ -711,13 +954,24 @@ fn compile_branch(
             }
         }
         if new_row.len() == new_matrix.hs.len() {
+            // dbg!("len match");
             new_matrix.actions_and_env.push(new_actions_and_env.clone());
             //TODO add more bindings here? If they come from the pattern?
             new_matrix.patterns.push(new_row);
         } else {
+            dbg!(new_row.len());
+            dbg!(&matrix.hs.len());
+            dbg!(new_matrix.hs.len());
             // panic!()
-            println!("TODO?"); //I guess my continue was kinda stupid since no row with a continue in that spot is a half finished row...
-            continue 'row;
+            dbg!(tag);
+            dbg!(&matrix.patterns[row_idx][i]);
+            dbg!(&matrix.hs[i]);
+            dbg!(&new_matrix.hs);
+            // dbg!(&new_row);
+            // dbg!(&new_matrix.hs);
+            dbg!("TODO?"); //I guess my continue was kinda stupid since no row with a continue in that spot is a half finished row...
+                           // continue 'row;
+            panic!();
         }
         // new_matrix
         // .actions_and_env
