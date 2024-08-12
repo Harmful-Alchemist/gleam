@@ -670,6 +670,7 @@ fn compile_branch(
                         name,
                         type_,
                     } => {
+                        let _ = new_actions_and_env.1.insert(name.clone(), Binding::Expr((&matrix.hs[j]).clone()));
                         match &matrix.hs[j] {
                             TypedExpr::Var { constructor, .. } => match tag {
                                 Tag::Constructor(c_name) => {
@@ -733,13 +734,65 @@ fn compile_branch(
                                 index,
                                 record,
                             } => {
+                                match tag.clone() {
+                                    Tag::Constructor(c_name) => {
+                                        let (module, name) = match typ.borrow() {
+                                            Type::Named { name, module, .. } => {
+                                                (module.clone(), name.clone())
+                                            }
+                                            Type::Var { type_ } => {
+                                                let type_: &RefCell<TypeVar> = type_.borrow();
+                                                let type_: &TypeVar = &*type_.borrow();
+                                                match type_ {
+                                                    TypeVar::Unbound { id } => todo!(),
+                                                    TypeVar::Link { type_ } => match type_.borrow() {
+                                                        Type::Named {
+                                                            publicity,
+                                                            package,
+                                                            module,
+                                                            name,
+                                                            args,
+                                                        } => (module.clone(), name.clone()),
+                                                        Type::Fn { args, retrn } => todo!(),
+                                                        Type::Var { type_ } => todo!(),
+                                                        Type::Tuple { elems } => todo!(),
+                                                    },
+                                                    TypeVar::Generic { id } => todo!(),
+                                                }
+                                            }
+                                            _ => {
+                                                // dbg!(oops);
+                                                todo!()
+                                            }
+                                        };
+    
+                                        let constructors =
+                                            variant_count.get(&(module.clone(), name.clone())).unwrap();
+    
+                                        let constructor = constructors
+                                            .iter()
+                                            .find(|c| c.name.as_str() == c_name.as_str())
+                                            .unwrap();
+                                        for arg in &constructor.arguments {
+                                            new_row.push(Pattern::Discard {
+                                                name: EcoString::new(),
+                                                location: location.clone(),
+                                                type_: arg.type_.clone(),
+                                            });
+                                        }
+
+                                    }
+                                    Tag::T => continue 'pattern,
+                                    _ => todo!()
+                                }
                                 // new_row.push(Pattern::Discard {
                                 //     name: EcoString::new(),
                                 //     location: location.clone(),
                                 //     type_: typ.clone(),
                                 // });
-                                //TODO  How many depends on type, else put above back
-                                todo!()
+                                // //TODO  How many depends on type, else put above back
+                                // dbg!(tag);
+                                // todo!()
                             }
                             e => {
                                 dbg!(e);

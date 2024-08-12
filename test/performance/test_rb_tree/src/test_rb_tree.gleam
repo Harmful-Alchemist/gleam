@@ -28,12 +28,12 @@ pub type RBT(t) {
 
 fn balance(c, v, t1, t2) {
   case c, v, t1, t2 {
-    Black, z, Node(Red, y, Node(Red, x, a, b), c), d
-    | Black, z, Node(Red, x, a, Node(Red, y, b, c)), d
-    | Black, x, a, Node(Red, z, Node(Red, y, b, c), d)
-    | Black, x, a, Node(Red, y, b, Node(Red, z, c, d)) ->
-      Node(Red, y, Node(Black, x, a, b), Node(Black, z, c, d))
-    a, b, c, d -> Node(a, b, c, d)
+    Black, z, Node(Red, y, Node(Red, x, a, b), c1), d
+    | Black, z, Node(Red, x, a, Node(Red, y, b, c1)), d
+    | Black, x, a, Node(Red, z, Node(Red, y, b, c1), d)
+    | Black, x, a, Node(Red, y, b, Node(Red, z, c1, d)) ->
+      Node(Red, y, Node(Black, x, a, b), Node(Black, z, c1, d))
+    a, b, c2, d -> Node(a, b, c2, d)
   }
   // case t1 {
   //   Node(Red, y, Node(Red, x, a, b), c) -> 1 //Ah cool already wrong!
