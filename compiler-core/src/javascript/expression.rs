@@ -569,7 +569,7 @@ impl<'module> Generator<'module> {
     }
 
     // TODO switch the feature switches again!
-    #[cfg(feature = "decisiontree")]
+    #[cfg(not(feature = "decisiontree"))]
     fn case<'a>(&mut self, subject_values: &'a [TypedExpr], clauses: &'a [TypedClause]) -> Output {
         // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.
         let (subjects, subject_assignments): (Vec<_>, Vec<_>) =
@@ -816,7 +816,7 @@ impl<'module> Generator<'module> {
         Ok(docvec![check].force_break())
     }
 
-    #[cfg(not(feature = "decisiontree"))]
+    #[cfg(feature = "decisiontree")]
     fn case<'a>(&mut self, subject_values: &'a [TypedExpr], clauses: &'a [TypedClause]) -> Output {
         // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.
         let (subjects, subject_assignments): (Vec<_>, Vec<_>) =

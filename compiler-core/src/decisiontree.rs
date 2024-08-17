@@ -69,6 +69,7 @@ fn compile_tree(
     mut matrix: PatternMatrix,
     variant_count: HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
 ) -> DecisionTree {
+    // dbg!(&matrix);
     // P is empty
     if matrix.patterns.first().is_none() {
         return Unreachable;
@@ -143,6 +144,8 @@ fn compile_tree(
 
     //3 Compile the decision sub-trees corresponding to each branch
     let mut cases = Vec::new();
+    dbg!(&tags);
+    dbg!("-------------");
     for tag in &tags {
         //TODO trying this so ignore earlier stuff, yeah
         // let mut hs = Vec::new();
@@ -203,8 +206,21 @@ fn get_tags(
             let len = matrix.patterns.len();
             for row_idx in 0..len {
                 match &matrix.patterns[row_idx][i] {
-                    Pattern::Constructor { name, .. } => {
-                        let _ = tags.push(Tag::Constructor(name.clone()));
+                    Pattern::Constructor { name: constructor_name, constructor,.. } => {
+                        // dbg!(constructor);
+                        // // let _ = tags.push(Tag::Constructor(constructor_name.clone()));
+                        // let constructor_name = match constructor {
+                        //     crate::analyse::Inferred::Known(crate::type_::PatternConstructor{name, ..}) => name,
+                        //     crate::analyse::Inferred::Unknown => todo!(),
+                        // };
+                        let _ = tags.push(Tag::Constructor(constructor_name.clone()));
+                        // dbg!(&name);
+                        // dbg!(&module);
+                        // dbg!(&variant_count);
+                        // let constructors = variant_count.get(&(module.clone(), name.clone())).unwrap().len();
+                        // if tags.len() == constructors {
+                        //     break; //No other cases possible
+                        // }
                     }
                     Pattern::Variable { name, .. } => {
                         let val = matrix.hs[i].clone();
@@ -212,6 +228,7 @@ fn get_tags(
                         // let _ = matrix.actions_and_env[row_idx].1.insert(name.clone(), Binding::Expr(val));
                         // dbg!(&matrix.actions_and_env[row_idx].1);
                         let _ = tags.push(Tag::T);
+                        // break; //Should catch all others
                     }
                     Pattern::List {
                         location,
@@ -245,6 +262,7 @@ fn get_tags(
                         type_,
                     } => {
                         let _ = tags.push(Tag::T);
+                        break; //Once we have default case why continue
                     }
                     x => {
                         println!("{x:?}");
@@ -670,7 +688,9 @@ fn compile_branch(
                         name,
                         type_,
                     } => {
-                        let _ = new_actions_and_env.1.insert(name.clone(), Binding::Expr((&matrix.hs[j]).clone()));
+                        let _ = new_actions_and_env
+                            .1
+                            .insert(name.clone(), Binding::Expr((&matrix.hs[j]).clone()));
                         match &matrix.hs[j] {
                             TypedExpr::Var { constructor, .. } => match tag {
                                 Tag::Constructor(c_name) => {
@@ -745,7 +765,8 @@ fn compile_branch(
                                                 let type_: &TypeVar = &*type_.borrow();
                                                 match type_ {
                                                     TypeVar::Unbound { id } => todo!(),
-                                                    TypeVar::Link { type_ } => match type_.borrow() {
+                                                    TypeVar::Link { type_ } => match type_.borrow()
+                                                    {
                                                         Type::Named {
                                                             publicity,
                                                             package,
@@ -765,10 +786,11 @@ fn compile_branch(
                                                 todo!()
                                             }
                                         };
-    
-                                        let constructors =
-                                            variant_count.get(&(module.clone(), name.clone())).unwrap();
-    
+
+                                        let constructors = variant_count
+                                            .get(&(module.clone(), name.clone()))
+                                            .unwrap();
+
                                         let constructor = constructors
                                             .iter()
                                             .find(|c| c.name.as_str() == c_name.as_str())
@@ -780,10 +802,9 @@ fn compile_branch(
                                                 type_: arg.type_.clone(),
                                             });
                                         }
-
                                     }
                                     Tag::T => continue 'pattern,
-                                    _ => todo!()
+                                    _ => todo!(),
                                 }
                                 // new_row.push(Pattern::Discard {
                                 //     name: EcoString::new(),
@@ -811,9 +832,34 @@ fn compile_branch(
                             TypedExpr::Var { constructor, .. } => match tag {
                                 Tag::Constructor(c_name) => {
                                     let (module, name) = match constructor.type_.borrow() {
-                                        Type::Named { name, module, .. } => (name, module),
-                                        _ => todo!(),
+                                        Type::Named { name, module, .. } => (module.clone(), name.clone()),
+                                        Type::Var { type_ } => {
+                                            let type_: &RefCell<TypeVar> = type_.borrow();
+                                            let type_clone: TypeVar = (&*type_.borrow()).clone();
+                                            // let type_ = type_.into_inner().clone();
+                                            // let type_: RefCell<TypeVar> = type_.borrow();
+                                            // let type__: TypeVar = type_;
+                                            match type_clone {
+                                                TypeVar::Link { type_ } => match type_.clone().borrow() {
+                                                    Type::Named {
+                                                        publicity,
+                                                        package,
+                                                        module,
+                                                        name,
+                                                        args,
+                                                    } => (module.clone(), name.clone()),
+                                                    _ => todo!(),
+                                                },
+                                                _ => todo!(),
+                                            }
+                                        }
+                                        t => {
+                                            dbg!(t);
+                                            todo!()
+                                        }
                                     };
+                                    // dbg!(&module, &name);
+                                    // dbg!(&variant_count);
                                     let constructors =
                                         variant_count.get(&(module.clone(), name.clone())).unwrap();
 
@@ -1056,6 +1102,7 @@ fn pick_column(
     variant_count: HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
 ) -> usize {
     assert!(matrix.patterns.first().is_some());
+    // return matrix.patterns.len() - 1; -> error!
     //TODO qba might be better, but this one easier for testing
     // TODO too stupid
     let patterns = &matrix.patterns;
