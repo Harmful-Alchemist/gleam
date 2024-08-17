@@ -144,8 +144,8 @@ fn compile_tree(
 
     //3 Compile the decision sub-trees corresponding to each branch
     let mut cases = Vec::new();
-    dbg!(&tags);
-    dbg!("-------------");
+    // dbg!(&tags);
+    // dbg!("-------------");
     for tag in &tags {
         //TODO trying this so ignore earlier stuff, yeah
         // let mut hs = Vec::new();
@@ -204,30 +204,26 @@ fn get_tags(
     match type_ {
         Type::Named { module, name, .. } => {
             let len = matrix.patterns.len();
+            // dbg!(len);
             for row_idx in 0..len {
+                // dbg!(&matrix.patterns[row_idx][i]);
+                // dbg!(row_idx);
                 match &matrix.patterns[row_idx][i] {
-                    Pattern::Constructor { name: constructor_name, constructor,.. } => {
-                        // dbg!(constructor);
-                        // // let _ = tags.push(Tag::Constructor(constructor_name.clone()));
-                        // let constructor_name = match constructor {
-                        //     crate::analyse::Inferred::Known(crate::type_::PatternConstructor{name, ..}) => name,
-                        //     crate::analyse::Inferred::Unknown => todo!(),
-                        // };
-                        let _ = tags.push(Tag::Constructor(constructor_name.clone()));
-                        // dbg!(&name);
-                        // dbg!(&module);
-                        // dbg!(&variant_count);
-                        // let constructors = variant_count.get(&(module.clone(), name.clone())).unwrap().len();
-                        // if tags.len() == constructors {
-                        //     break; //No other cases possible
-                        // }
+                    Pattern::Constructor {
+                        name: constructor_name,
+                        ..
+                    } => {
+                        let tag = Tag::Constructor(constructor_name.clone());
+                        if !tags.contains(&tag) {
+                            let _ = tags.push(tag);
+                        }
                     }
-                    Pattern::Variable { name, .. } => {
-                        let val = matrix.hs[i].clone();
+                    Pattern::Variable { .. } => {
+                        // let val = matrix.hs[i].clone();
                         // dbg!((name.clone(), Binding::Expr(val.clone())));
                         // let _ = matrix.actions_and_env[row_idx].1.insert(name.clone(), Binding::Expr(val));
                         // dbg!(&matrix.actions_and_env[row_idx].1);
-                        let _ = tags.push(Tag::T);
+                        // let _ = tags.push(Tag::T);
                         // break; //Should catch all others
                     }
                     Pattern::List {
@@ -261,8 +257,8 @@ fn get_tags(
                         location,
                         type_,
                     } => {
-                        let _ = tags.push(Tag::T);
-                        break; //Once we have default case why continue
+                        // let _ = tags.push(Tag::T);
+                        // break; //Once we have default case why continue well cause we need all the tags. Well cause we need to add it at the end lol
                     }
                     x => {
                         println!("{x:?}");
@@ -278,6 +274,7 @@ fn get_tags(
                 if tags.len()
                     != (*variant_count.get(&(module.clone(), name.clone())).unwrap()).len()
                 {
+                    // dbg!("adding default case");
                     let _ = tags.push(Tag::T);
                 }
             } else {
@@ -292,6 +289,8 @@ fn get_tags(
             match type_ {
                 TypeVar::Link { type_ } => {
                     let type_ = type_.borrow();
+                    // dbg!(type_);
+                    // dbg!(&matrix.patterns.len());
                     get_tags(type_, matrix, i, tags, variant_count);
                 }
                 _ => {
@@ -300,7 +299,7 @@ fn get_tags(
             }
         }
         Type::Tuple { .. } => {
-            let _ = tags.push(Tag::T);
+            todo!()
         }
         x => {
             println!("{x:?}");
@@ -503,9 +502,9 @@ fn compile_branch(
                                                 let constructors = variant_count
                                                     .get(&(module.clone(), name.clone()))
                                                     .unwrap();
-                                                dbg!(&module);
-                                                dbg!(&name);
-                                                dbg!(&c_name);
+                                                // dbg!(&module);
+                                                // dbg!(&name);
+                                                // dbg!(&c_name);
                                                 let constructor = constructors
                                                     .iter()
                                                     .find(|c| c.name.as_str() == c_name.as_str())
@@ -832,7 +831,9 @@ fn compile_branch(
                             TypedExpr::Var { constructor, .. } => match tag {
                                 Tag::Constructor(c_name) => {
                                     let (module, name) = match constructor.type_.borrow() {
-                                        Type::Named { name, module, .. } => (module.clone(), name.clone()),
+                                        Type::Named { name, module, .. } => {
+                                            (module.clone(), name.clone())
+                                        }
                                         Type::Var { type_ } => {
                                             let type_: &RefCell<TypeVar> = type_.borrow();
                                             let type_clone: TypeVar = (&*type_.borrow()).clone();
@@ -840,16 +841,18 @@ fn compile_branch(
                                             // let type_: RefCell<TypeVar> = type_.borrow();
                                             // let type__: TypeVar = type_;
                                             match type_clone {
-                                                TypeVar::Link { type_ } => match type_.clone().borrow() {
-                                                    Type::Named {
-                                                        publicity,
-                                                        package,
-                                                        module,
-                                                        name,
-                                                        args,
-                                                    } => (module.clone(), name.clone()),
-                                                    _ => todo!(),
-                                                },
+                                                TypeVar::Link { type_ } => {
+                                                    match type_.clone().borrow() {
+                                                        Type::Named {
+                                                            publicity,
+                                                            package,
+                                                            module,
+                                                            name,
+                                                            args,
+                                                        } => (module.clone(), name.clone()),
+                                                        _ => todo!(),
+                                                    }
+                                                }
                                                 _ => todo!(),
                                             }
                                         }

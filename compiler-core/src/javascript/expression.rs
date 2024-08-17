@@ -758,9 +758,9 @@ impl<'module> Generator<'module> {
             //TODO only could be result of earlier bug!
             Case::Default => {
                 if only {
-                    docvec!(line(), processed_tree, line())
+                    docvec!(processed_tree)
                 } else {
-                    docvec!("else {", line(), processed_tree, line(), "}")
+                    docvec!(" else {", line(), processed_tree, "}")
                 }
             }
             Case::ConstructorEquality { constructor } => todo!(),
