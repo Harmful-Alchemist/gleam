@@ -1217,7 +1217,7 @@ fn heuristic_b(
                         _ => {
                             match variant_count.get(&(module.clone(), name.clone())) {
                                 Some(x) => -(x.len() as i32),
-                                None => -3,
+                                None => -1, //Better, only one
                             }
                             // -((*variant_count
                             //     .get(&(module.clone(), name.clone()))
