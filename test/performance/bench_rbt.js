@@ -3,7 +3,7 @@ console.log(`Using decision trees: ${treeFeature}`);
 
 Deno.bench("Matching RBTs", async (b) => {
     const projectPath = "./test_rb_tree/";
-    
+
     try {
         await Deno.remove("./test_rb_tree/build/", { recursive: true });
     } catch (err) {
@@ -32,9 +32,19 @@ Deno.bench("Matching RBTs", async (b) => {
 
     const jsPath = "./test_rb_tree/build/dev/javascript/test_rb_tree/test_rb_tree.mjs";
     const jsCode = await import(jsPath);
-
+    const lol = [];
     b.start();
-    const huh = jsCode.main();
+    for (let x = 0; x < 100; x++) {
+        lol.push(jsCode.main());
+    }
     b.end();
+    const huh = lol[0];
+    // console.log(lol);
     // console.log(huh);
+    // let list = huh;
+    // while (list.head) {
+    //     console.log(list.head);
+    //     list = list.tail;
+    // }
+    // console.log("====")
 });

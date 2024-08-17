@@ -133,6 +133,7 @@ fn compile_tree(
     // Build an actual switch node.
     //1 Pick column
     let i = pick_column(&matrix, variant_count.clone());
+    dbg!(i);
 
     //2 Identify necessary branches
     let type_ = matrix.hs[i].type_();
@@ -164,8 +165,9 @@ fn compile_tree(
             variant_count.clone(),
         ));
         let case = match tag {
-            Tag::Constructor(ref c) => Case::ConstructorEquality {
+            Tag::Constructor(ref c, last) => Case::ConstructorEquality {
                 constructor: c.clone(),
+                last: *last
             },
             Tag::T => Case::Default,
             Tag::List {
@@ -213,7 +215,7 @@ fn get_tags(
                         name: constructor_name,
                         ..
                     } => {
-                        let tag = Tag::Constructor(constructor_name.clone());
+                        let tag = Tag::Constructor(constructor_name.clone(), false);
                         if !tags.contains(&tag) {
                             let _ = tags.push(tag);
                         }
@@ -276,6 +278,14 @@ fn get_tags(
                 {
                     // dbg!("adding default case");
                     let _ = tags.push(Tag::T);
+                } else {
+                    match tags.last() {
+                        Some(Tag::Constructor(name, false)) => {
+                            let len = tags.len();
+                            tags[len-1] = Tag::Constructor(name.clone(), true);
+                        }
+                        _ => panic!() //Shouldn't happen
+                    }
                 }
             } else {
                 // TODO
@@ -328,7 +338,7 @@ fn compile_branch(
             match h {
                 TypedExpr::Var { constructor, .. } => {
                     match tag.clone() {
-                        Tag::Constructor(c_name) => {
+                        Tag::Constructor(c_name, _) => {
                             //No field map? Nope variant is local variable.
                             let c_t: &Type = constructor.type_.borrow();
                             // println!("constructor: {constructor:?}\nconstructor type {c_t:?}\n");
@@ -480,7 +490,7 @@ fn compile_branch(
                     record,
                 } => {
                     match tag.clone() {
-                        Tag::Constructor(c_name) => {
+                        Tag::Constructor(c_name, _) => {
                             //No field map? Nope variant is local variable.
                             let c_t: &Type = typ.borrow();
                             // println!("constructor: {constructor:?}\nconstructor type {c_t:?}\n");
@@ -692,7 +702,7 @@ fn compile_branch(
                             .insert(name.clone(), Binding::Expr((&matrix.hs[j]).clone()));
                         match &matrix.hs[j] {
                             TypedExpr::Var { constructor, .. } => match tag {
-                                Tag::Constructor(c_name) => {
+                                Tag::Constructor(c_name, _) => {
                                     let (module, name) = match constructor.type_.borrow() {
                                         Type::Named { name, module, .. } => {
                                             (module.clone(), name.clone())
@@ -754,7 +764,7 @@ fn compile_branch(
                                 record,
                             } => {
                                 match tag.clone() {
-                                    Tag::Constructor(c_name) => {
+                                    Tag::Constructor(c_name, _) => {
                                         let (module, name) = match typ.borrow() {
                                             Type::Named { name, module, .. } => {
                                                 (module.clone(), name.clone())
@@ -829,7 +839,7 @@ fn compile_branch(
                     } => {
                         match &matrix.hs[j] {
                             TypedExpr::Var { constructor, .. } => match tag {
-                                Tag::Constructor(c_name) => {
+                                Tag::Constructor(c_name, _) => {
                                     let (module, name) = match constructor.type_.borrow() {
                                         Type::Named { name, module, .. } => {
                                             (module.clone(), name.clone())
@@ -909,7 +919,7 @@ fn compile_branch(
                                 //     type_: typ.clone(),
                                 // });
                                 match tag.clone() {
-                                    Tag::Constructor(c_name) => {
+                                    Tag::Constructor(c_name, _) => {
                                         let (module, name) = match typ.borrow() {
                                             Type::Named {
                                                 publicity,
@@ -1027,7 +1037,7 @@ fn compile_branch(
                         spread,
                         type_,
                     } => match tag {
-                        Tag::Constructor(ref c_name) => {
+                        Tag::Constructor(ref c_name, _) => {
                             if c_name == name {
                                 //TODO check are the call args complete?
                                 for argument in arguments {
@@ -1095,9 +1105,22 @@ fn compile_branch(
     compile_tree(new_matrix, variant_count)
 }
 
+#[derive(Debug, Eq, PartialEq)]
 struct Score {
     index: usize,
     score: i32,
+}
+
+impl Ord for Score {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.score.cmp(&other.score)
+    }
+}
+
+impl PartialOrd for Score {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+       Some(self.cmp(other))
+    }
 }
 
 fn pick_column(
@@ -1105,11 +1128,15 @@ fn pick_column(
     variant_count: HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
 ) -> usize {
     assert!(matrix.patterns.first().is_some());
+    // return 0; //Shoot can be faster! Then using the heuristics :(
     // return matrix.patterns.len() - 1; -> error!
     //TODO qba might be better, but this one easier for testing
     // TODO too stupid
     let patterns = &matrix.patterns;
-    let f_sorted = heuristic_f(patterns);
+    let mut f_sorted = heuristic_f(patterns);
+    f_sorted.sort();
+    f_sorted.reverse();
+    dbg!(&f_sorted);
     if let (Some(Score { score: y, .. }), Some(Score { score: z, .. })) =
         (f_sorted.get(0), f_sorted.get(1))
     {
@@ -1118,7 +1145,10 @@ fn pick_column(
                 .iter()
                 .filter_map(|s| if s.score == *y { Some(s.index) } else { None })
                 .collect();
-            let d_sorted = heuristic_d(patterns, top_scorers);
+            let mut d_sorted = heuristic_d(patterns, top_scorers);
+            d_sorted.sort();
+            d_sorted.reverse();
+            dbg!(&d_sorted);
             if let (Some(Score { score: y, .. }), Some(Score { score: z, .. })) =
                 (d_sorted.get(0), d_sorted.get(1))
             {
@@ -1127,18 +1157,23 @@ fn pick_column(
                         .iter()
                         .filter_map(|s| if s.score == *y { Some(s.index) } else { None })
                         .collect();
-                    let b_sorted = heuristic_b(patterns, top_scorers, variant_count);
+                    let mut b_sorted = heuristic_b(patterns, top_scorers, variant_count);
+                    b_sorted.sort();
+                    b_sorted.reverse();
+                    dbg!(&b_sorted);
                     return b_sorted[0].index;
                 } else {
-                    return d_sorted[0].index;
+                    return d_sorted.iter().max_by(|s1,s2| {s1.score.cmp(&s2.score)}).unwrap().index;
                 }
             }
         }
     }
+
     return f_sorted[0].index;
 }
 
 fn heuristic_f(patterns: &Patterns) -> Vec<Score> {
+    // dbg!(patterns);
     patterns[0]
         .iter()
         .enumerate()
@@ -1246,7 +1281,7 @@ pub enum Binding {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Case {
-    ConstructorEquality { constructor: EcoString }, //TypedExpr::BinOp
+    ConstructorEquality { constructor: EcoString, last: bool }, //TypedExpr::BinOp
     ConstantEquality(EcoString),
     EmptyList,
     List,
@@ -1265,7 +1300,7 @@ struct PatternMatrix {
 #[derive(Eq, PartialEq, Debug, Clone)]
 enum Tag {
     T, //catchall
-    Constructor(EcoString),
+    Constructor(EcoString,bool),
     Constant(EcoString),
     List {
         head_element: Option<Pattern<Arc<Type>>>,
@@ -1278,25 +1313,25 @@ impl Hash for Tag {
         // core::mem::discriminant(self).hash(state);
         match self {
             Tag::T => core::mem::discriminant(self).hash(state),
-            Tag::Constructor(c) => c.hash(state),
+            Tag::Constructor(c, _) => c.hash(state),
             Tag::Constant(_) => todo!(),
             Tag::List { head_element, tail } => core::mem::discriminant(self).hash(state), //TODO!
         }
     }
 }
 
-impl Ord for Case {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match (self, other) {
-            (Case::Default, _) => Ordering::Less,
-            (_, Case::Default) => Ordering::Greater,
-            (_, _) => Ordering::Equal,
-        }
-    }
-}
+// impl Ord for Case {
+//     fn cmp(&self, other: &Self) -> Ordering {
+//         match (self, other) {
+//             (Case::Default, _) => Ordering::Less,
+//             (_, Case::Default) => Ordering::Greater,
+//             (_, _) => Ordering::Equal,
+//         }
+//     }
+// }
 
-impl PartialOrd for Case {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
+// impl PartialOrd for Case {
+//     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+//         Some(self.cmp(other))
+//     }
+// }

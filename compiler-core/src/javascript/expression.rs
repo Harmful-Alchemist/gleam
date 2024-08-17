@@ -617,10 +617,10 @@ impl<'module> Generator<'module> {
                 let mut vec = Vec::new();
                 let mut first = true;
                 let only = cases.len() == 1;
-                let cases: Vec<(Case, Box<DecisionTree>)> = cases
-                    .into_iter()
-                    .sorted_by(|a, b| Ord::cmp(&b.0, &a.0))
-                    .collect();
+                // let cases: Vec<(Case, Box<DecisionTree>)> = cases
+                //     .into_iter()
+                //     .sorted_by(|a, b| Ord::cmp(&b.0, &a.0))
+                //     .collect();
                 for case in cases {
                     vec.push(self.tree_case(case.0, case.1, discriminant.clone(), first, only)?);
                     first = false;
@@ -721,8 +721,7 @@ impl<'module> Generator<'module> {
     ) -> Output {
         let processed_tree = self.decision_tree(*tree)?;
         let check = match case {
-            Case::ConstructorEquality { constructor } => {
-                let start = if first { "if (" } else { "else if (" };
+            Case::ConstructorEquality { constructor, last } => {
                 let var = match discriminant {
                     TypedExpr::Var {
                         location,
@@ -742,17 +741,22 @@ impl<'module> Generator<'module> {
                         todo!()
                     } // x => self.expression(&x)?
                 };
-                docvec!(
-                    start,
-                    var,
-                    " instanceof ",
-                    constructor,
-                    ") {",
-                    line(),
-                    processed_tree,
-                    line(),
-                    "}"
-                ) //TODO actually translate the constructor to right thing!
+                if !last {
+                    let start = if first { "if (" } else { "else if (" };
+                    docvec!(
+                        start,
+                        var,
+                        " instanceof ",
+                        constructor,
+                        ") {",
+                        line(),
+                        processed_tree,
+                        line(),
+                        "}"
+                    ) //TODO actually translate the constructor to right thing!
+                } else {
+                    docvec!("else {", line(), processed_tree, line(), "}")
+                }
             }
             Case::ConstantEquality(_) => todo!(),
             //TODO only could be result of earlier bug!
@@ -763,7 +767,7 @@ impl<'module> Generator<'module> {
                     docvec!(" else {", line(), processed_tree, "}")
                 }
             }
-            Case::ConstructorEquality { constructor } => todo!(),
+            Case::ConstructorEquality { constructor, last } => todo!(),
             Case::ConstantEquality(_) => todo!(),
             Case::EmptyList => {
                 let start = if first { "if (" } else { "else if (" };
@@ -785,7 +789,16 @@ impl<'module> Generator<'module> {
                         todo!()
                     } // x => self.expression(&x)?
                 };
-                docvec!(start, var,".hasLength(0)", ") {", line(), processed_tree, line(), "}")
+                docvec!(
+                    start,
+                    var,
+                    ".hasLength(0)",
+                    ") {",
+                    line(),
+                    processed_tree,
+                    line(),
+                    "}"
+                )
             }
             Case::List => {
                 let start = if first { "if (" } else { "else if (" };
@@ -808,7 +821,16 @@ impl<'module> Generator<'module> {
                     } // x => self.expression(&x)?
                 };
                 //TODO wrong
-                docvec!(start, var, ".atLeastLength(1)", ") {", line(), processed_tree, line(), "}")
+                docvec!(
+                    start,
+                    var,
+                    ".atLeastLength(1)",
+                    ") {",
+                    line(),
+                    processed_tree,
+                    line(),
+                    "}"
+                )
             }
             Case::Default => todo!(),
         };
