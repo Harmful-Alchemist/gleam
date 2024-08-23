@@ -111,22 +111,22 @@ fn compile_tree(
     }
 
     // "If there exists a variable pattern p-l_i and the previous rows contain no var patterns add it to the env.
-    // TODO wait don't I do this above already?
-    for (idx, row) in matrix.patterns.iter().enumerate() {
-        for (i, p) in row.iter().enumerate() {
-            match p {
-                Pattern::Variable { name, .. } => {
-                    // let hs_len = matrix.hs.len();
-                    // println!("row: {idx}, pattern: {i}, subject count: {hs_len}");
-                    // let _ = matrix.actions_and_env[idx]
-                    //     .1
-                    //     .insert(name.clone(), matrix.hs[i].clone());
-                    ()
-                }
-                _ => (),
-            }
-        }
-    }
+    // TODO wait don't I do this above already? Yeah I do it later... So remove this
+    // for (idx, row) in matrix.patterns.iter().enumerate() {
+    //     for (i, p) in row.iter().enumerate() {
+    //         match p {
+    //             Pattern::Variable { name, .. } => {
+    //                 // let hs_len = matrix.hs.len();
+    //                 // println!("row: {idx}, pattern: {i}, subject count: {hs_len}");
+    //                 // let _ = matrix.actions_and_env[idx]
+    //                 //     .1
+    //                 //     .insert(name.clone(), matrix.hs[i].clone());
+    //                 ()
+    //             }
+    //             _ => (),
+    //         }
+    //     }
+    // }
 
     // OR patterns already removed
 
@@ -167,7 +167,7 @@ fn compile_tree(
         let case = match tag {
             Tag::Constructor(ref c, last) => Case::ConstructorEquality {
                 constructor: c.clone(),
-                last: *last
+                last: *last,
             },
             Tag::T => Case::Default,
             Tag::List {
@@ -198,7 +198,7 @@ fn compile_tree(
 
 fn get_tags(
     type_: &Type,
-    matrix: &mut PatternMatrix,
+    matrix: &PatternMatrix,
     i: usize,
     tags: &mut Vec<Tag>,
     variant_count: &HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
@@ -282,9 +282,9 @@ fn get_tags(
                     match tags.last() {
                         Some(Tag::Constructor(name, false)) => {
                             let len = tags.len();
-                            tags[len-1] = Tag::Constructor(name.clone(), true);
+                            tags[len - 1] = Tag::Constructor(name.clone(), true);
                         }
-                        _ => panic!() //Shouldn't happen
+                        _ => panic!(), //Shouldn't happen
                     }
                 }
             } else {
@@ -1119,7 +1119,7 @@ impl Ord for Score {
 
 impl PartialOrd for Score {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-       Some(self.cmp(other))
+        Some(self.cmp(other))
     }
 }
 
@@ -1163,7 +1163,11 @@ fn pick_column(
                     dbg!(&b_sorted);
                     return b_sorted[0].index;
                 } else {
-                    return d_sorted.iter().max_by(|s1,s2| {s1.score.cmp(&s2.score)}).unwrap().index;
+                    return d_sorted
+                        .iter()
+                        .max_by(|s1, s2| s1.score.cmp(&s2.score))
+                        .unwrap()
+                        .index;
                 }
             }
         }
@@ -1300,7 +1304,7 @@ struct PatternMatrix {
 #[derive(Eq, PartialEq, Debug, Clone)]
 enum Tag {
     T, //catchall
-    Constructor(EcoString,bool),
+    Constructor(EcoString, bool),
     Constant(EcoString),
     List {
         head_element: Option<Pattern<Arc<Type>>>,

@@ -32,13 +32,15 @@ Deno.bench("Matching RBTs", async (b) => {
 
     const jsPath = "./test_rb_tree/build/dev/javascript/test_rb_tree/test_rb_tree.mjs";
     const jsCode = await import(jsPath);
-    const lol = [];
+    // const lol = [];
+    let huh;
     b.start();
-    for (let x = 0; x < 100; x++) {
-        lol.push(jsCode.main());
-    }
+    // for (let x = 0; x < 100; x++) {
+    // lol.push(jsCode.main());
+    // }
+    huh = jsCode.main();
     b.end();
-    const huh = lol[0];
+    // const huh = lol[0];
     // console.log(lol);
     // console.log(huh);
     // let list = huh;
