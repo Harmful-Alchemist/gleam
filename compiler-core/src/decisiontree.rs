@@ -1,7 +1,7 @@
 use core::hash::Hash;
 
 use std::{
-    borrow::Borrow, cell::RefCell, cmp::Ordering, collections::HashMap, option::Option, sync::Arc,
+    borrow::Borrow, cell::RefCell, cmp::Ordering, collections::{HashMap, HashSet}, option::Option, sync::Arc,
 };
 
 use ecow::EcoString;
@@ -1123,6 +1123,8 @@ impl PartialOrd for Score {
     }
 }
 
+//fdb
+#[cfg(not(feature = "qba"))]
 fn pick_column(
     matrix: &PatternMatrix,
     variant_count: HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
@@ -1176,6 +1178,60 @@ fn pick_column(
     return f_sorted[0].index;
 }
 
+#[cfg(feature = "qba")]
+fn pick_column(
+    matrix: &PatternMatrix,
+    variant_count: HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
+) -> usize {
+    assert!(matrix.patterns.first().is_some());
+    // return 0; //Shoot can be faster! Then using the heuristics :(
+    // return matrix.patterns.len() - 1; -> error!
+    //TODO qba might be better, but this one easier for testing
+    // TODO too stupid
+    let patterns = &matrix.patterns;
+    let mut f_sorted = heuristic_q(patterns);
+    f_sorted.sort();
+    f_sorted.reverse();
+    dbg!(&f_sorted);
+    if let (Some(Score { score: y, .. }), Some(Score { score: z, .. })) =
+        (f_sorted.get(0), f_sorted.get(1))
+    {
+        if y == z {
+            let top_scorers = f_sorted
+                .iter()
+                .filter_map(|s| if s.score == *y { Some(s.index) } else { None })
+                .collect();
+            let mut d_sorted = heuristic_b(patterns, top_scorers, variant_count);
+            d_sorted.sort();
+            d_sorted.reverse();
+            dbg!(&d_sorted);
+            if let (Some(Score { score: y, .. }), Some(Score { score: z, .. })) =
+                (d_sorted.get(0), d_sorted.get(1))
+            {
+                if y == z {
+                    let top_scorers = d_sorted
+                        .iter()
+                        .filter_map(|s| if s.score == *y { Some(s.index) } else { None })
+                        .collect();
+                    let mut b_sorted = heuristic_a(patterns, top_scorers);
+                    b_sorted.sort();
+                    b_sorted.reverse();
+                    dbg!(&b_sorted);
+                    return b_sorted[0].index;
+                } else {
+                    return d_sorted
+                        .iter()
+                        .max_by(|s1, s2| s1.score.cmp(&s2.score))
+                        .unwrap()
+                        .index;
+                }
+            }
+        }
+    }
+
+    return f_sorted[0].index;
+}
+
 fn heuristic_f(patterns: &Patterns) -> Vec<Score> {
     // dbg!(patterns);
     patterns[0]
@@ -1183,20 +1239,72 @@ fn heuristic_f(patterns: &Patterns) -> Vec<Score> {
         .enumerate()
         .map(|(index, p)| Score {
             index,
-            score: if let Pattern::Discard { .. } = p {
-                0
-            } else {
-                1
+            score: match p {
+                Pattern::Discard { .. } | Pattern::Variable { .. } => 0,
+                _ => 1,
             },
         })
         .collect()
+}
+
+fn heuristic_q(patterns: &Patterns) -> Vec<Score> {
+    let mut scores = Vec::new();
+    for column_idx in 0..patterns[0].len() {
+        let mut column_score = 0;
+        for row_idx in 0..patterns.len() {
+            match patterns[row_idx][column_idx] {
+                Pattern::Discard { .. } | Pattern::Variable { .. } => break,
+                _ => {
+                    column_score += 1;
+                }
+            }
+        }
+        scores.push(Score {
+            index: column_idx,
+            score: column_score,
+        });
+    }
+    scores
+}
+
+
+fn heuristic_a(patterns: &Patterns, included: Vec<usize>) -> Vec<Score> {
+    let mut scores = Vec::new();
+    for column_idx in 0..patterns[0].len() {
+        
+        if included.contains(&column_idx) {
+            continue;
+        }
+
+        let mut constructors = HashMap::new();
+        for row_idx in 0..patterns.len() {
+            match &patterns[row_idx][column_idx] {
+                Pattern::Constructor { name, arguments, .. } => {
+                    let _ = constructors.insert(name.clone(), arguments.len());
+                },
+                _ => ()
+            }
+        }
+
+        let mut column_score = 0;
+
+        for (_, s) in constructors.iter() {
+            column_score -= *s as i32;
+        }
+
+        scores.push(Score {
+            index: column_idx,
+            score: column_score,
+        });
+    }
+    scores
 }
 
 fn heuristic_d(patterns: &Patterns, included: Vec<usize>) -> Vec<Score> {
     score(
         patterns,
         Box::new(|p| match p {
-            Pattern::Discard { .. } => -1,
+            Pattern::Discard { .. } | Pattern::Variable { .. } => -1,
             _ => 0,
         }),
     )
@@ -1204,6 +1312,7 @@ fn heuristic_d(patterns: &Patterns, included: Vec<usize>) -> Vec<Score> {
     .filter(|s| included.contains(&s.index))
     .collect()
 }
+
 fn heuristic_b(
     patterns: &Patterns,
     included: Vec<usize>,
@@ -1215,6 +1324,7 @@ fn heuristic_b(
             match p {
                 Pattern::List { .. } => -2,
                 Pattern::Constructor { type_, .. } => match type_.borrow() {
+                    //TODO this is wrong!
                     Type::Named { name, module, .. } => match name.as_str() {
                         "Nil" => -1,
                         "Bool" | "Result" => -2,
@@ -1257,7 +1367,7 @@ fn score(patterns: &Patterns, f: Box<dyn Fn(&Pattern<Arc<Type>>) -> i32>) -> Vec
             score: *score,
         })
         .collect();
-    scores.sort_by_cached_key(|s| s.score);
+    // scores.sort_by_cached_key(|s| s.score); //TODO sorting twice? I guess so :P
     scores
 }
 
