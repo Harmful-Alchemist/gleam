@@ -2,7 +2,7 @@ use vec1::Vec1;
 
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UntypedExpr {
     Int {
         location: SrcSpan,
@@ -247,7 +247,7 @@ impl HasLocation for UntypedExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Use {
     /// This is the expression with the untyped/typed code of the use callback
     /// function.

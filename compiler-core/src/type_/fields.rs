@@ -10,6 +10,16 @@ pub struct FieldMap {
     pub fields: HashMap<EcoString, u32>,
 }
 
+impl std::hash::Hash for FieldMap {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.arity.hash(state);
+        // self.fields.hash(state);
+        for f in self.fields.iter() {
+            f.hash(state);
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct DuplicateField;
 

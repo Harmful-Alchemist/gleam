@@ -21,7 +21,7 @@ use im::hashmap;
 use itertools::Itertools;
 use vec1::Vec1;
 
-#[derive(Clone, Copy, Debug, Eq, PartialOrd, Ord, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialOrd, Ord, PartialEq, Serialize, Hash)]
 pub struct Implementations {
     /// Wether the function has a pure-gleam implementation.
     ///

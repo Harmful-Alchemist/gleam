@@ -134,7 +134,7 @@ fn module_dependencies_test() {
 pub type TypedArg = Arg<Arc<Type>>;
 pub type UntypedArg = Arg<()>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Arg<T> {
     pub names: ArgNames,
     pub location: SrcSpan,
@@ -174,7 +174,7 @@ impl TypedArg {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ArgNames {
     Discard {
         name: EcoString,
@@ -249,7 +249,7 @@ impl<T: PartialEq> RecordConstructorArg<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeAstConstructor {
     pub location: SrcSpan,
     pub module: Option<EcoString>,
@@ -257,32 +257,32 @@ pub struct TypeAstConstructor {
     pub arguments: Vec<TypeAst>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeAstFn {
     pub location: SrcSpan,
     pub arguments: Vec<TypeAst>,
     pub return_: Box<TypeAst>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeAstVar {
     pub location: SrcSpan,
     pub name: EcoString,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeAstTuple {
     pub location: SrcSpan,
     pub elems: Vec<TypeAst>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeAstHole {
     pub location: SrcSpan,
     pub name: EcoString,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeAst {
     Constructor(TypeAstConstructor),
     Fn(TypeAstFn),
@@ -573,7 +573,7 @@ fn type_ast_print_tuple() {
     )
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Publicity {
     Public,
     Private,
@@ -1036,7 +1036,7 @@ impl Layer {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinOp {
     // Boolean logic
     And,
@@ -1166,7 +1166,7 @@ impl BinOp {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct CallArg<A> {
     pub label: Option<EcoString>,
     pub location: SrcSpan,
@@ -1179,7 +1179,7 @@ pub struct CallArg<A> {
     pub implicit: Option<ImplicitCallArgOrigin>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum ImplicitCallArgOrigin {
     Use,
     Pipe,
@@ -1243,20 +1243,20 @@ impl<T> HasLocation for CallArg<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RecordUpdateSpread {
     pub base: Box<UntypedExpr>,
     pub location: SrcSpan,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UntypedRecordUpdateArg {
     pub label: EcoString,
     pub location: SrcSpan,
     pub value: UntypedExpr,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypedRecordUpdateArg {
     pub label: EcoString,
     pub location: SrcSpan,
@@ -1279,7 +1279,7 @@ pub type TypedClause = Clause<TypedExpr, Arc<Type>, EcoString>;
 
 pub type UntypedClause = Clause<UntypedExpr, (), ()>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Clause<Expr, Type, RecordTag> {
     pub location: SrcSpan,
     pub pattern: MultiPattern<Type>,
@@ -1317,7 +1317,7 @@ impl TypedClause {
 pub type UntypedClauseGuard = ClauseGuard<(), ()>;
 pub type TypedClauseGuard = ClauseGuard<Arc<Type>, EcoString>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ClauseGuard<Type, RecordTag> {
     Equals {
         location: SrcSpan,
@@ -1595,7 +1595,7 @@ impl TypedClauseGuard {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Default, Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq, Eq, Default, Clone, Copy, serde::Serialize, serde::Deserialize, Hash)]
 pub struct SrcSpan {
     pub start: u32,
     pub end: u32,
@@ -1620,7 +1620,7 @@ pub struct DefinitionLocation<'module> {
 pub type UntypedPattern = Pattern<()>;
 pub type TypedPattern = Pattern<Arc<Type>>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Pattern<Type> {
     Int {
         location: SrcSpan,
@@ -1724,7 +1724,7 @@ impl Default for Inferred<()> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AssignName {
     Variable(EcoString),
     Discard(EcoString),
@@ -1894,7 +1894,7 @@ impl<A> HasLocation for Pattern<A> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AssignmentKind {
     // let x = ...
     Let,
@@ -1926,7 +1926,7 @@ pub type TypedConstantBitArraySegment = BitArraySegment<TypedConstant, Arc<Type>
 pub type UntypedPatternBitArraySegment = BitArraySegment<UntypedPattern, ()>;
 pub type TypedPatternBitArraySegment = BitArraySegment<TypedPattern, Arc<Type>>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BitArraySegment<Value, Type> {
     pub location: SrcSpan,
     pub value: Box<Value>,
@@ -1942,7 +1942,7 @@ impl TypedExprBitArraySegment {
 
 pub type TypedConstantBitArraySegmentOption = BitArrayOption<TypedConstant>;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum BitArrayOption<Value> {
     Bytes {
         location: SrcSpan,
@@ -2069,7 +2069,7 @@ impl<A> BitArrayOption<A> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TodoKind {
     Keyword,
     EmptyFunction,
@@ -2123,7 +2123,7 @@ impl GroupedStatements {
 }
 
 /// A statement with in a function body.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Statement<TypeT, ExpressionT> {
     /// A bare expression that is not assigned to any variable.
     Expression(ExpressionT),
@@ -2242,7 +2242,7 @@ impl TypedStatement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Assignment<TypeT, ExpressionT> {
     pub location: SrcSpan,
     pub value: Box<ExpressionT>,
@@ -2271,7 +2271,7 @@ impl TypedAssignment {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UseAssignment {
     pub location: SrcSpan,
     pub pattern: UntypedPattern,

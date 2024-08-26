@@ -569,8 +569,10 @@ impl<'module> Generator<'module> {
     }
 
     // TODO switch the feature switches again!
-    #[cfg(feature = "decisiontree")]
+    #[cfg(not(feature = "decisiontree"))]
     fn case<'a>(&mut self, subject_values: &'a [TypedExpr], clauses: &'a [TypedClause]) -> Output {
+        println!("Turn features back!");
+        dbg!("Turn features back!");
         // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.
         let (subjects, subject_assignments): (Vec<_>, Vec<_>) =
             pattern::assign_subjects(self, subject_values)
@@ -590,8 +592,9 @@ impl<'module> Generator<'module> {
             .try_collect()?;
 
         //TODO clone!
-        let tree = DecisionTreeGenerator::new(subject_values, clauses, self.variant_count.clone())
+        let (tree,subtrees) = DecisionTreeGenerator::new(subject_values, clauses, self.variant_count.clone())
             .to_tree();
+        dbg!(subtrees.len());
         // let tree = &tree;
         // println!("{tree:?}");
         // println!("got a tree!\n\n");
@@ -838,8 +841,9 @@ impl<'module> Generator<'module> {
         Ok(docvec![check].force_break())
     }
 
-    #[cfg(not(feature = "decisiontree"))]
+    #[cfg(feature = "decisiontree")]
     fn case<'a>(&mut self, subject_values: &'a [TypedExpr], clauses: &'a [TypedClause]) -> Output {
+        todo!();
         // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.
         let (subjects, subject_assignments): (Vec<_>, Vec<_>) =
             pattern::assign_subjects(self, subject_values)

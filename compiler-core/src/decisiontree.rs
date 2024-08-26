@@ -1,7 +1,7 @@
 use core::hash::Hash;
 
 use std::{
-    borrow::Borrow, cell::RefCell, cmp::Ordering, collections::{HashMap, HashSet}, option::Option, sync::Arc,
+    borrow::Borrow, cell::RefCell, cmp::Ordering, collections::{HashMap, HashSet}, option::Option, sync::{Arc, Mutex},
 };
 
 use ecow::EcoString;
@@ -32,7 +32,7 @@ impl<'a> DecisionTreeGenerator<'a> {
         }
     }
 
-    pub(crate) fn to_tree(&self) -> DecisionTree {
+    pub(crate) fn to_tree(&self) -> (DecisionTree,HashMap<DecisionTree,usize>) {
         // Build the matrix!
         let hs = self.subject_values.to_vec();
         let mut actions_and_env = Vec::new();
@@ -61,17 +61,25 @@ impl<'a> DecisionTreeGenerator<'a> {
             patterns,
             actions_and_env,
         };
-        compile_tree(matrix, self.variant_count.clone())
+        let subtrees: Arc<Mutex<HashMap<DecisionTree,usize>>> = Arc::new(Mutex::new(HashMap::new()));
+        let tree = compile_tree(matrix, self.variant_count.clone(), subtrees.clone());
+        // let subtrees = subtrees.as_ref;
+        let subtrees = (*subtrees.lock().unwrap()).clone();
+        (tree, subtrees)
     }
 }
 
 fn compile_tree(
     mut matrix: PatternMatrix,
     variant_count: HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
+    subtrees: Arc<Mutex<HashMap<DecisionTree,usize>>>
 ) -> DecisionTree {
     // dbg!(&matrix);
     // P is empty
     if matrix.patterns.first().is_none() {
+        let mut st = subtrees.lock().unwrap();
+        let st_len = st.len();
+        let _  = st.entry(Unreachable).or_insert(st_len);
         return Unreachable;
     }
 
@@ -107,7 +115,11 @@ fn compile_tree(
             }
         });
 
-        return Success { branch, bindings };
+        let node = Success { branch, bindings };
+        let mut st = subtrees.lock().unwrap();
+        let st_len = st.len();
+        let _  = st.entry(node.clone()).or_insert(st_len);
+        return node;
     }
 
     // "If there exists a variable pattern p-l_i and the previous rows contain no var patterns add it to the env.
@@ -133,7 +145,7 @@ fn compile_tree(
     // Build an actual switch node.
     //1 Pick column
     let i = pick_column(&matrix, variant_count.clone());
-    dbg!(i);
+    // dbg!(i);
 
     //2 Identify necessary branches
     let type_ = matrix.hs[i].type_();
@@ -163,6 +175,7 @@ fn compile_tree(
             tag,
             matrix.clone(),
             variant_count.clone(),
+            subtrees.clone(),
         ));
         let case = match tag {
             Tag::Constructor(ref c, last) => Case::ConstructorEquality {
@@ -190,10 +203,14 @@ fn compile_tree(
     }
 
     //4 Assemble into single tree of switch nodes
-    Switch {
+    let node = Switch {
         discriminant: matrix.hs[i].clone(),
         cases,
-    }
+    };
+    let mut st = subtrees.lock().unwrap();
+    let st_len = st.len();
+    let _  = st.entry(node.clone()).or_insert(st_len);
+    return node;
 }
 
 fn get_tags(
@@ -323,6 +340,7 @@ fn compile_branch(
     tag: &Tag,
     matrix: PatternMatrix,
     variant_count: HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
+    subtrees: Arc<Mutex<HashMap<DecisionTree,usize>>>,
 ) -> DecisionTree {
     let mut new_matrix = PatternMatrix {
         hs: Vec::new(),
@@ -1102,7 +1120,7 @@ fn compile_branch(
     if new_matrix.patterns.len() != new_matrix.actions_and_env.len() {
         panic!();
     }
-    compile_tree(new_matrix, variant_count)
+    compile_tree(new_matrix, variant_count, subtrees.clone())
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -1138,7 +1156,7 @@ fn pick_column(
     let mut f_sorted = heuristic_f(patterns);
     f_sorted.sort();
     f_sorted.reverse();
-    dbg!(&f_sorted);
+    // dbg!(&f_sorted);
     if let (Some(Score { score: y, .. }), Some(Score { score: z, .. })) =
         (f_sorted.get(0), f_sorted.get(1))
     {
@@ -1150,7 +1168,7 @@ fn pick_column(
             let mut d_sorted = heuristic_d(patterns, top_scorers);
             d_sorted.sort();
             d_sorted.reverse();
-            dbg!(&d_sorted);
+            // dbg!(&d_sorted);
             if let (Some(Score { score: y, .. }), Some(Score { score: z, .. })) =
                 (d_sorted.get(0), d_sorted.get(1))
             {
@@ -1162,7 +1180,7 @@ fn pick_column(
                     let mut b_sorted = heuristic_b(patterns, top_scorers, variant_count);
                     b_sorted.sort();
                     b_sorted.reverse();
-                    dbg!(&b_sorted);
+                    // dbg!(&b_sorted);
                     return b_sorted[0].index;
                 } else {
                     return d_sorted
@@ -1192,7 +1210,7 @@ fn pick_column(
     let mut f_sorted = heuristic_q(patterns);
     f_sorted.sort();
     f_sorted.reverse();
-    dbg!(&f_sorted);
+    // dbg!(&f_sorted);
     if let (Some(Score { score: y, .. }), Some(Score { score: z, .. })) =
         (f_sorted.get(0), f_sorted.get(1))
     {
@@ -1204,7 +1222,7 @@ fn pick_column(
             let mut d_sorted = heuristic_b(patterns, top_scorers, variant_count);
             d_sorted.sort();
             d_sorted.reverse();
-            dbg!(&d_sorted);
+            // dbg!(&d_sorted);
             if let (Some(Score { score: y, .. }), Some(Score { score: z, .. })) =
                 (d_sorted.get(0), d_sorted.get(1))
             {
@@ -1216,7 +1234,7 @@ fn pick_column(
                     let mut b_sorted = heuristic_a(patterns, top_scorers);
                     b_sorted.sort();
                     b_sorted.reverse();
-                    dbg!(&b_sorted);
+                    // dbg!(&b_sorted);
                     return b_sorted[0].index;
                 } else {
                     return d_sorted
@@ -1371,7 +1389,7 @@ fn score(patterns: &Patterns, f: Box<dyn Fn(&Pattern<Arc<Type>>) -> i32>) -> Vec
     scores
 }
 
-#[derive(Debug)]
+#[derive(Debug,Eq,PartialEq,Clone)]
 pub enum DecisionTree {
     Switch {
         discriminant: TypedExpr,
@@ -1386,14 +1404,33 @@ pub enum DecisionTree {
 
 type Bindings = HashMap<EcoString, Binding>; //TypedExpr::Var
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+impl Hash for DecisionTree {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        match self {
+            Switch { discriminant, cases } => {
+                discriminant.hash(state);
+                cases.hash(state);
+            },
+            Success { branch, bindings } => {
+                branch.hash(state);
+                for b in bindings.iter() {
+                    b.hash(state);
+                }
+            },
+            Unreachable => {},
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Binding {
     Expr(TypedExpr),
     ListHead(EcoString),
     ListTail(EcoString),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Case {
     ConstructorEquality { constructor: EcoString, last: bool }, //TypedExpr::BinOp
     ConstantEquality(EcoString),

@@ -82,6 +82,31 @@ pub enum Type {
     Tuple { elems: Vec<Arc<Type>> },
 }
 
+impl std::hash::Hash for Type {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        match self {
+            Type::Named { publicity, package, module, name, args } => {
+                publicity.hash(state);
+                package.hash(state);
+                module.hash(state);
+                name.hash(state);
+                args.hash(state);
+            },
+            Type::Fn { args, retrn } => {
+                args.hash(state);
+                retrn.hash(state);
+            },
+            Type::Var { type_ } => {
+                type_.clone().borrow().hash(state);
+            },
+            Type::Tuple { elems } => {
+                elems.hash(state);
+            },
+        }
+    }
+}
+
 impl Type {
     pub fn is_result_constructor(&self) -> bool {
         match self {
@@ -368,7 +393,7 @@ pub struct RecordAccessor {
     pub type_: Arc<Type>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ValueConstructorVariant {
     /// A locally defined variable or function parameter
     LocalVariable { location: SrcSpan },
@@ -527,7 +552,7 @@ impl ValueConstructorVariant {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ModuleValueConstructor {
     Record {
         name: EcoString,
@@ -752,7 +777,7 @@ impl ModuleInterface {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PatternConstructor {
     pub name: EcoString,
     pub field_map: Option<FieldMap>,
@@ -775,7 +800,7 @@ impl PatternConstructor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeVar {
     /// Unbound is an unbound variable. It is one specific type but we don't
     /// know what yet in the inference process. It has a unique id which can be used to
@@ -913,7 +938,7 @@ impl TypeConstructor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ValueConstructor {
     pub publicity: Publicity,
     pub deprecation: Deprecation,
@@ -921,7 +946,7 @@ pub struct ValueConstructor {
     pub type_: Arc<Type>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Hash)]
 pub enum Deprecation {
     NotDeprecated,
     Deprecated { message: EcoString },

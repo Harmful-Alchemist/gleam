@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 use super::*;
 use crate::type_::{bool, HasType, Type, ValueConstructorVariant};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypedExpr {
     Int {
         location: SrcSpan,
