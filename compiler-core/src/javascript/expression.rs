@@ -606,11 +606,13 @@ impl<'module> Generator<'module> {
 
         // let mut doc = nil();
         // let doc = self.decision_tree(tree, &subtrees)?;
-        let doc: Vec<Document> = subtrees
+        let mut xs: Vec<(DecisionTree,usize)> = subtrees.clone().into_iter().collect();
+        xs.sort_by(|(_,a), (_,b)| b.cmp(a)); //reverse sort
+        let doc: Vec<Document> = xs
             .clone()
-            .keys()
+            // .keys()
             .into_iter()
-            .map(|t| self.decision_tree(t.clone(), &subtrees).unwrap())
+            .map(|(t,_)| self.decision_tree(t.clone(), &subtrees).unwrap())
             .collect();
 
         // Ok(docvec![subject_assignments, doc].force_break())
@@ -747,7 +749,8 @@ impl<'module> Generator<'module> {
                     line(),
                     "}",
                     line(),
-                    // "break;"
+                    "break pmloop;", //For the while true loop in lists
+                    line()
                 ))
             }
             DecisionTree::Unreachable => Ok(self.throw_error(
