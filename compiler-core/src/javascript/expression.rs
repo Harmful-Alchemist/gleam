@@ -569,10 +569,10 @@ impl<'module> Generator<'module> {
     }
 
     // TODO switch the feature switches again!
-    #[cfg(not(feature = "decisiontree"))]
+    #[cfg(feature = "decisiontree")]
     fn case<'a>(&mut self, subject_values: &'a [TypedExpr], clauses: &'a [TypedClause]) -> Output {
-        println!("Turn features back!");
-        dbg!("Turn features back!");
+        // println!("Turn features back!");
+        // dbg!("Turn features back!");
         // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.
         let (subjects, subject_assignments): (Vec<_>, Vec<_>) =
             pattern::assign_subjects(self, subject_values)
@@ -592,8 +592,9 @@ impl<'module> Generator<'module> {
             .try_collect()?;
 
         //TODO clone!
-        let (tree,subtrees) = DecisionTreeGenerator::new(subject_values, clauses, self.variant_count.clone())
-            .to_tree();
+        let (tree, subtrees) =
+            DecisionTreeGenerator::new(subject_values, clauses, self.variant_count.clone())
+                .to_tree();
         dbg!(subtrees.len());
         // let tree = &tree;
         // println!("{tree:?}");
@@ -604,15 +605,36 @@ impl<'module> Generator<'module> {
         // let mut gen = pattern::Generator::new(self);
 
         // let mut doc = nil();
-        let doc = self.decision_tree(tree)?;
+        // let doc = self.decision_tree(tree, &subtrees)?;
+        let doc: Vec<Document> = subtrees
+            .clone()
+            .keys()
+            .into_iter()
+            .map(|t| self.decision_tree(t.clone(), &subtrees).unwrap())
+            .collect();
 
         // Ok(docvec![subject_assignments, doc].force_break())
-        Ok(docvec![subject_assignments, doc].force_break())
+        Ok(docvec![
+            subject_assignments,
+            format!("let thingamajig = {};", subtrees.len()), //Last insert is toplevel node and we add 1 everywhere.
+            line(),
+            "pmloop: while (thingamajig) {",
+            "switch (thingamajig) {",
+            doc,
+            "}",
+            "}",
+            ""
+        ]
+        .force_break())
     }
 
-    fn decision_tree<'a>(&mut self, tree: DecisionTree) -> Output {
+    fn decision_tree<'a>(
+        &mut self,
+        tree: DecisionTree,
+        subtrees: &HashMap<DecisionTree, usize>,
+    ) -> Output {
         // dbg!(&tree);
-        match tree {
+        match tree.clone() {
             DecisionTree::Switch {
                 discriminant,
                 cases,
@@ -625,10 +647,23 @@ impl<'module> Generator<'module> {
                 //     .sorted_by(|a, b| Ord::cmp(&b.0, &a.0))
                 //     .collect();
                 for case in cases {
-                    vec.push(self.tree_case(case.0, case.1, discriminant.clone(), first, only)?);
+                    vec.push(self.tree_case(
+                        case.0,
+                        case.1,
+                        discriminant.clone(),
+                        first,
+                        only,
+                        subtrees,
+                    )?);
                     first = false;
                 }
-                Ok(docvec!(vec).force_break())
+                Ok(docvec!(
+                    format!("case {}:", subtrees.get(&tree).unwrap() + 1),
+                    vec,
+                    line(),
+                    // "break;"
+                )
+                .force_break())
             }
             DecisionTree::Success { branch, bindings } => {
                 let mut binds = Vec::new();
@@ -642,7 +677,7 @@ impl<'module> Generator<'module> {
                                     constructor,
                                     name,
                                 } => binds.push(docvec!(
-                                    "let ",
+                                    "const ",
                                     binding.0.clone(),
                                     " = ",
                                     name,
@@ -656,7 +691,7 @@ impl<'module> Generator<'module> {
                                     index,
                                     record,
                                 } => binds.push(docvec!(
-                                    "let ",
+                                    "const ",
                                     binding.0.clone(),
                                     " = ",
                                     self.tuple_index(record, *index)?,
@@ -681,7 +716,7 @@ impl<'module> Generator<'module> {
                             // Type::Tuple { elems } => todo!(),
                         }
                         Binding::ListHead(list_name) => binds.push(docvec!(
-                            "let ",
+                            "const ",
                             binding.0.clone(),
                             "= ",
                             list_name,
@@ -689,7 +724,7 @@ impl<'module> Generator<'module> {
                             line()
                         )),
                         Binding::ListTail(list_name) => binds.push(docvec!(
-                            "let ",
+                            "const ",
                             binding.0.clone(),
                             "= ",
                             list_name,
@@ -701,7 +736,19 @@ impl<'module> Generator<'module> {
                     // binds.push(d);
                 }
                 let expr = self.expression(&branch)?;
-                Ok(docvec!(binds, expr))
+                Ok(docvec!(
+                    format!("case {}:", subtrees.get(&tree).unwrap() + 1),
+                    line(),
+                    "{",
+                    line(),
+                    binds,
+                    // "thingamajig = false;",
+                    expr,
+                    line(),
+                    "}",
+                    line(),
+                    // "break;"
+                ))
             }
             DecisionTree::Unreachable => Ok(self.throw_error(
                 "Bad tree",
@@ -721,8 +768,17 @@ impl<'module> Generator<'module> {
         discriminant: TypedExpr,
         first: bool,
         only: bool,
+        subtrees: &HashMap<DecisionTree, usize>,
     ) -> Output {
-        let processed_tree = self.decision_tree(*tree)?;
+        // let processed_tree = self.decision_tree(*tree, subtrees)?;
+        let processed_tree = docvec!(
+            format!(
+                "thingamajig = {};",
+                subtrees.get(tree.as_ref()).unwrap() + 1
+            ),
+            line(),
+            "continue pmloop;"
+        );
         let check = match case {
             Case::ConstructorEquality { constructor, last } => {
                 let var = match discriminant {
@@ -841,9 +897,9 @@ impl<'module> Generator<'module> {
         Ok(docvec![check].force_break())
     }
 
-    #[cfg(feature = "decisiontree")]
+    #[cfg(not(feature = "decisiontree"))]
     fn case<'a>(&mut self, subject_values: &'a [TypedExpr], clauses: &'a [TypedClause]) -> Output {
-        todo!();
+        // todo!();
         // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.
         let (subjects, subject_assignments): (Vec<_>, Vec<_>) =
             pattern::assign_subjects(self, subject_values)
