@@ -46,7 +46,7 @@ pub(crate) struct Generator<'module> {
     // frames.
     pub tail_recursion_used: bool,
     variant_count: &'module HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
-    tree_count: usize
+    tree_count: usize,
 }
 
 impl<'module> Generator<'module> {
@@ -573,6 +573,279 @@ impl<'module> Generator<'module> {
     // TODO switch the feature switches again!
     #[cfg(feature = "decisiontree")]
     fn case<'a>(&mut self, subject_values: &'a [TypedExpr], clauses: &'a [TypedClause]) -> Output {
+        // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.
+        let (subjects, subject_assignments): (Vec<_>, Vec<_>) =
+            pattern::assign_subjects(self, subject_values)
+                .into_iter()
+                .unzip();
+
+        // If there is a subject name given create a variable to hold it for
+        // use in patterns
+        let subject_assignments: Vec<_> = subject_assignments //Right we go these above, clear.
+            .into_iter()
+            .zip(subject_values)
+            .flat_map(|(assignment_name, value)| assignment_name.map(|name| (name, value)))
+            .map(|(name, value)| {
+                let value = self.not_in_tail_position(|gen| gen.wrap_expression(value))?;
+                Ok(docvec!("let ", name, " = ", value, ";", line()))
+            })
+            .try_collect()?;
+
+        //TODO clone!
+        let (tree, _) =
+            DecisionTreeGenerator::new(subject_values, clauses, self.variant_count.clone())
+                .to_tree();
+        // let tree = &tree;
+        // println!("{tree:?}");
+        // println!("got a tree!\n\n");
+        // dbg!(tree);
+        // println!("\n\n");
+
+        // let mut gen = pattern::Generator::new(self);
+
+        // let mut doc = nil();
+        let doc = self.decision_tree(tree)?;
+
+        // Ok(docvec![subject_assignments, doc].force_break())
+        Ok(docvec![subject_assignments, doc].force_break())
+    }
+
+    #[cfg(feature = "decisiontree")]
+    fn decision_tree<'a>(&mut self, tree: DecisionTree) -> Output {
+        // dbg!(&tree);
+        match tree {
+            DecisionTree::Switch {
+                discriminant,
+                cases,
+            } => {
+                let mut vec = Vec::new();
+                let mut first = true;
+                let only = cases.len() == 1;
+                // let cases: Vec<(Case, Box<DecisionTree>)> = cases
+                //     .into_iter()
+                //     .sorted_by(|a, b| Ord::cmp(&b.0, &a.0))
+                //     .collect();
+                for case in cases {
+                    vec.push(self.tree_case(case.0, case.1, discriminant.clone(), first, only)?);
+                    first = false;
+                }
+                Ok(docvec!(vec).force_break())
+            }
+            DecisionTree::Success { branch, bindings } => {
+                let mut binds = Vec::new();
+                // dbg!(&bindings);
+                for binding in bindings {
+                    match &binding.1 {
+                        Binding::Expr(expr) => {
+                            match expr {
+                                TypedExpr::Var {
+                                    location,
+                                    constructor,
+                                    name,
+                                } => binds.push(docvec!(
+                                    "let ",
+                                    binding.0.clone(),
+                                    " = ",
+                                    name,
+                                    ";",
+                                    line()
+                                )),
+                                TypedExpr::RecordAccess {
+                                    location,
+                                    typ,
+                                    label,
+                                    index,
+                                    record,
+                                } => binds.push(docvec!(
+                                    "let ",
+                                    binding.0.clone(),
+                                    " = ",
+                                    self.tuple_index(record, *index)?,
+                                    ";",
+                                    line()
+                                )),
+                                _ => todo!(),
+                            }
+
+                            // let var_name = name;
+                            // match constructor.type_.borrow() {
+                            // Type::Named { name, .. } => {
+                            //     if name == "List" {
+                            //         //TODO Alright so need some custom bindings for sure!
+                            //         binds.push(docvec!("let ", binding.0, "=", var_name, ".head;", line()));
+                            //     } else {
+                            //         todo!()
+                            //     }
+                            // },
+                            // Type::Fn { args, retrn } => todo!(),
+                            // Type::Var { type_ } => todo!(),
+                            // Type::Tuple { elems } => todo!(),
+                        }
+                        Binding::ListHead(list_name) => binds.push(docvec!(
+                            "let ",
+                            binding.0.clone(),
+                            "= ",
+                            list_name,
+                            ".head;",
+                            line()
+                        )),
+                        Binding::ListTail(list_name) => binds.push(docvec!(
+                            "let ",
+                            binding.0.clone(),
+                            "= ",
+                            list_name,
+                            ".tail;",
+                            line()
+                        )),
+                    };
+                    // let d = self.assignment(constructor)?;
+                    // binds.push(d);
+                }
+                let expr = self.expression(&branch)?;
+                Ok(docvec!(binds, expr))
+            }
+            DecisionTree::Unreachable => Ok(self.throw_error(
+                "Bad tree",
+                &docvec!["\"bad tree\""],
+                SrcSpan { start: 0, end: 0 },
+                [],
+            )),
+        }
+
+        // todo!()
+    }
+
+    #[cfg(feature = "decisiontree")]
+    fn tree_case<'a>(
+        &mut self,
+        case: Case,
+        tree: Box<DecisionTree>,
+        discriminant: TypedExpr,
+        first: bool,
+        only: bool,
+    ) -> Output {
+        let processed_tree = self.decision_tree(*tree)?;
+        let check = match case {
+            Case::ConstructorEquality { constructor, last } => {
+                let var = match discriminant {
+                    TypedExpr::Var {
+                        location,
+                        constructor,
+                        name,
+                    } => self.variable(&name, &constructor)?,
+                    TypedExpr::RecordAccess {
+                        location,
+                        typ,
+                        label,
+                        index,
+                        record,
+                        // } => self.record_access(&record, &label)?, //TODO dang! RecordAccess wrong?
+                    } => self.tuple_index(&record, index)?,
+                    x => {
+                        dbg!(&x);
+                        todo!()
+                    } // x => self.expression(&x)?
+                };
+                if !last {
+                    let start = if first { "if (" } else { "else if (" };
+                    docvec!(
+                        start,
+                        var,
+                        " instanceof ",
+                        constructor,
+                        ") {",
+                        line(),
+                        processed_tree,
+                        line(),
+                        "}"
+                    ) //TODO actually translate the constructor to right thing!
+                } else {
+                    docvec!("else {", line(), processed_tree, line(), "}")
+                }
+            }
+            Case::ConstantEquality(_) => todo!(),
+            //TODO only could be result of earlier bug!
+            Case::Default => {
+                if only {
+                    docvec!(processed_tree)
+                } else {
+                    docvec!(" else {", line(), processed_tree, "}")
+                }
+            }
+            Case::ConstructorEquality { constructor, last } => todo!(),
+            Case::ConstantEquality(_) => todo!(),
+            Case::EmptyList => {
+                let start = if first { "if (" } else { "else if (" };
+                let var = match discriminant {
+                    TypedExpr::Var {
+                        location,
+                        constructor,
+                        name,
+                    } => self.variable(&name, &constructor)?,
+                    TypedExpr::RecordAccess {
+                        location,
+                        typ,
+                        label,
+                        index,
+                        record,
+                    } => self.tuple_index(&record, index)?,
+                    x => {
+                        dbg!(&x);
+                        todo!()
+                    } // x => self.expression(&x)?
+                };
+                docvec!(
+                    start,
+                    var,
+                    ".hasLength(0)",
+                    ") {",
+                    line(),
+                    processed_tree,
+                    line(),
+                    "}"
+                )
+            }
+            Case::List => {
+                let start = if first { "if (" } else { "else if (" };
+                let var = match discriminant {
+                    TypedExpr::Var {
+                        location,
+                        constructor,
+                        name,
+                    } => self.variable(&name, &constructor)?,
+                    TypedExpr::RecordAccess {
+                        location,
+                        typ,
+                        label,
+                        index,
+                        record,
+                    } => self.tuple_index(&record, index)?,
+                    x => {
+                        dbg!(&x);
+                        todo!()
+                    } // x => self.expression(&x)?
+                };
+                //TODO wrong
+                docvec!(
+                    start,
+                    var,
+                    ".atLeastLength(1)",
+                    ") {",
+                    line(),
+                    processed_tree,
+                    line(),
+                    "}"
+                )
+            }
+            Case::Default => todo!(),
+        };
+
+        Ok(docvec![check].force_break())
+    }
+
+    // TODO switch the feature switches again!
+    #[cfg(feature = "decisiontree_switch")]
+    fn case<'a>(&mut self, subject_values: &'a [TypedExpr], clauses: &'a [TypedClause]) -> Output {
         let tree_number = self.tree_count;
         self.tree_count += 1;
         // println!("Turn features back!");
@@ -610,17 +883,17 @@ impl<'module> Generator<'module> {
 
         // let mut doc = nil();
         // let doc = self.decision_tree(tree, &subtrees)?;
-        let mut xs: Vec<(DecisionTree,usize)> = subtrees.clone().into_iter().collect();
-        xs.sort_by(|(_,a), (_,b)| b.cmp(a)); //reverse sort
-
-
-        
+        let mut xs: Vec<(DecisionTree, usize)> = subtrees.clone().into_iter().collect();
+        xs.sort_by(|(_, a), (_, b)| b.cmp(a)); //reverse sort
 
         let doc: Vec<Document> = xs
             .clone()
             // .keys()
             .into_iter()
-            .map(|(t,_)| self.decision_tree(t.clone(), &subtrees, tree_number).unwrap())
+            .map(|(t, _)| {
+                self.decision_tree(t.clone(), &subtrees, tree_number)
+                    .unwrap()
+            })
             .collect();
 
         // Ok(docvec![subject_assignments, doc].force_break())
@@ -638,6 +911,7 @@ impl<'module> Generator<'module> {
         .force_break())
     }
 
+    #[cfg(feature = "decisiontree_switch")]
     fn decision_tree<'a>(
         &mut self,
         tree: DecisionTree,
@@ -665,7 +939,7 @@ impl<'module> Generator<'module> {
                         first,
                         only,
                         subtrees,
-                        tree_number
+                        tree_number,
                     )?);
                     first = false;
                 }
@@ -774,6 +1048,7 @@ impl<'module> Generator<'module> {
         // todo!()
     }
 
+    #[cfg(feature = "decisiontree_switch")]
     fn tree_case<'a>(
         &mut self,
         case: Case,
@@ -782,12 +1057,13 @@ impl<'module> Generator<'module> {
         first: bool,
         only: bool,
         subtrees: &HashMap<DecisionTree, usize>,
-        tree_number: usize
+        tree_number: usize,
     ) -> Output {
         // let processed_tree = self.decision_tree(*tree, subtrees)?;
         let processed_tree = docvec!(
             format!(
-                "thingamajig{} = {};", tree_number,
+                "thingamajig{} = {};",
+                tree_number,
                 subtrees.get(tree.as_ref()).unwrap() + 1
             ),
             line(),
@@ -917,6 +1193,7 @@ impl<'module> Generator<'module> {
     }
 
     #[cfg(not(feature = "decisiontree"))]
+    #[cfg(not(feature = "decisiontree_switch"))]
     fn case<'a>(&mut self, subject_values: &'a [TypedExpr], clauses: &'a [TypedClause]) -> Output {
         // todo!();
         // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.

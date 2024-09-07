@@ -78,4 +78,5 @@ rand = "0"
 
 [features]
 decisiontree = []
+decisiontree_switch = []
 qba = []

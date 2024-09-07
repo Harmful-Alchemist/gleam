@@ -4,7 +4,7 @@ use std::{
     borrow::Borrow,
     cell::RefCell,
     cmp::Ordering,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     option::Option,
     sync::{Arc, Mutex},
 };
@@ -1350,7 +1350,7 @@ fn heuristic_q(patterns: &Patterns) -> Vec<Score> {
 fn heuristic_a(patterns: &Patterns, included: Vec<usize>) -> Vec<Score> {
     let mut scores = Vec::new();
     for column_idx in 0..patterns[0].len() {
-        if included.contains(&column_idx) {
+        if !included.contains(&column_idx) {
             continue;
         }
 

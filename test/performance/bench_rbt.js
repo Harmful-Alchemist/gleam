@@ -4,6 +4,9 @@ console.log(`Using decision trees: ${treeFeature}`);
 const qbaFeature = Deno.args[1] === "true";
 console.log(`Using qba: ${qbaFeature}`);
 
+const switchFeature = Deno.args[2] === "true";
+console.log(`Using switch to deduplicate trees: ${qbaFeature}`);
+
 Deno.bench("Matching RBTs", async (b) => {
     const projectPath = "./test_rb_tree/";
 
@@ -17,15 +20,23 @@ Deno.bench("Matching RBTs", async (b) => {
 
     const command = treeFeature ?
         qbaFeature ?
-            new Deno.Command("cargo", {
-                args: ["run", "--features", "decisiontree,qba", "--", "build", "--target=js"],
+            switchFeature ? new Deno.Command("cargo", {
+                args: ["run", "--features", "decisiontree_switch,qba", "--", "build", "--target=js"],
                 cwd: projectPath,
-            })
+            }) :
+                new Deno.Command("cargo", {
+                    args: ["run", "--features", "decisiontree,qba", "--", "build", "--target=js"],
+                    cwd: projectPath,
+                })
             :
-            new Deno.Command("cargo", {
-                args: ["run", "--features", "decisiontree", "--", "build", "--target=js"],
+            switchFeature ? new Deno.Command("cargo", {
+                args: ["run", "--features", "decisiontree_switch", "--", "build", "--target=js"],
                 cwd: projectPath,
-            })
+            }) :
+                new Deno.Command("cargo", {
+                    args: ["run", "--features", "decisiontree", "--", "build", "--target=js"],
+                    cwd: projectPath,
+                })
         :
         new Deno.Command("cargo", {
             args: ["run", "--", "build", "--target=js"],
