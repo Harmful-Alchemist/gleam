@@ -1,7 +1,12 @@
 use core::hash::Hash;
 
 use std::{
-    borrow::Borrow, cell::RefCell, cmp::Ordering, collections::{HashMap, HashSet}, option::Option, sync::{Arc, Mutex},
+    borrow::Borrow,
+    cell::RefCell,
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    option::Option,
+    sync::{Arc, Mutex},
 };
 
 use ecow::EcoString;
@@ -32,7 +37,7 @@ impl<'a> DecisionTreeGenerator<'a> {
         }
     }
 
-    pub(crate) fn to_tree(&self) -> (DecisionTree,HashMap<DecisionTree,usize>) {
+    pub(crate) fn to_tree(&self) -> (DecisionTree, HashMap<DecisionTree, usize>) {
         // Build the matrix!
         let hs = self.subject_values.to_vec();
         let mut actions_and_env = Vec::new();
@@ -61,7 +66,8 @@ impl<'a> DecisionTreeGenerator<'a> {
             patterns,
             actions_and_env,
         };
-        let subtrees: Arc<Mutex<HashMap<DecisionTree,usize>>> = Arc::new(Mutex::new(HashMap::new()));
+        let subtrees: Arc<Mutex<HashMap<DecisionTree, usize>>> =
+            Arc::new(Mutex::new(HashMap::new()));
         let tree = compile_tree(matrix, self.variant_count.clone(), subtrees.clone());
         // let subtrees = subtrees.as_ref;
         let subtrees = (*subtrees.lock().unwrap()).clone();
@@ -72,14 +78,14 @@ impl<'a> DecisionTreeGenerator<'a> {
 fn compile_tree(
     mut matrix: PatternMatrix,
     variant_count: HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
-    subtrees: Arc<Mutex<HashMap<DecisionTree,usize>>>
+    subtrees: Arc<Mutex<HashMap<DecisionTree, usize>>>,
 ) -> DecisionTree {
     // dbg!(&matrix);
     // P is empty
     if matrix.patterns.first().is_none() {
         let mut st = subtrees.lock().unwrap();
         let st_len = st.len();
-        let _  = st.entry(Unreachable).or_insert(st_len);
+        let _ = st.entry(Unreachable).or_insert(st_len);
         return Unreachable;
     }
 
@@ -118,7 +124,7 @@ fn compile_tree(
         let node = Success { branch, bindings };
         let mut st = subtrees.lock().unwrap();
         let st_len = st.len();
-        let _  = st.entry(node.clone()).or_insert(st_len);
+        let _ = st.entry(node.clone()).or_insert(st_len);
         return node;
     }
 
@@ -209,7 +215,7 @@ fn compile_tree(
     };
     let mut st = subtrees.lock().unwrap();
     let st_len = st.len();
-    let _  = st.entry(node.clone()).or_insert(st_len);
+    let _ = st.entry(node.clone()).or_insert(st_len);
     return node;
 }
 
@@ -340,7 +346,7 @@ fn compile_branch(
     tag: &Tag,
     matrix: PatternMatrix,
     variant_count: HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
-    subtrees: Arc<Mutex<HashMap<DecisionTree,usize>>>,
+    subtrees: Arc<Mutex<HashMap<DecisionTree, usize>>>,
 ) -> DecisionTree {
     let mut new_matrix = PatternMatrix {
         hs: Vec::new(),
@@ -409,11 +415,50 @@ fn compile_branch(
                                         _ => todo!(),
                                     }
                                 }
-                                _ => todo!(),
+                                Type::Named {
+                                    publicity,
+                                    package,
+                                    module,
+                                    name,
+                                    args,
+                                } => {
+                                    // dbg!(&module);
+                                    // dbg!(&name);
+                                    //Ugh TODO copied from the link
+                                    let constructors =
+                                        variant_count.get(&(module.clone(), name.clone())).unwrap();
+                                    // dbg!(&module);
+                                    // dbg!(&name);
+                                    // dbg!(&c_name);
+                                    let constructor = constructors
+                                        .iter()
+                                        .find(|c| c.name.as_str() == c_name.as_str())
+                                        .unwrap();
+                                    // dbg!(&constructor.arguments.len());
+                                    // dbg!(&constructor);
+                                    for (index, arg) in constructor.arguments.iter().enumerate() {
+                                        let label = match &arg.label {
+                                            Some((l, _)) => l.clone(),
+                                            None => EcoString::from(format!("{index}")),
+                                        };
+                                        // dbg!(&label);
+                                        new_matrix.hs.push(TypedExpr::RecordAccess {
+                                            location: h.location(),
+                                            typ: arg.type_.clone(),
+                                            label,
+                                            index: index as u64,
+                                            record: Box::new(h.clone()),
+                                        });
+                                    }
+                                }
+                                x => {
+                                    dbg!(x);
+                                    todo!()
+                                }
                             }
                         }
                         Tag::List { head_element, tail } => {
-                            // dbg!(&tag);
+                            dbg!("whut");
                             // println!("{tag:?}");
                             // dbg!(&head_element);
                             // dbg!(tail);
@@ -422,20 +467,14 @@ fn compile_branch(
                                     //Empty list.
                                     // one columns jus head?
                                     // println!("elem no tail! {head_element:?}");
+                                    dbg!("Empty list");
                                     continue;
                                 }
                                 (Some(_), None) => {
-                                    // println!("elem! {head_element:?}");
-                                    // two columns, head and tail of subject value at i old
-                                    match &matrix.hs[i] {
-                                        TypedExpr::List { elements, .. } => {
-                                            println!("This ok then?");
-                                            new_matrix.hs.push(elements[0].clone());
-                                        }
-                                        _ => panic!(), //well now
-                                    }
+                                    todo!()
                                 }
                                 (Some(p1), Some(p2)) => {
+                                    dbg!("some some list pattern");
                                     let p2 = p2.as_ref();
                                     match (p1, p2) {
                                         (
@@ -909,7 +948,30 @@ fn compile_branch(
                                 Tag::T => {
                                     continue 'pattern;
                                 }
-                                _ => {
+                                Tag::List { head_element, tail } => {
+                                    dbg!("List tag for new row patterns with discard pattern");
+                                    if head_element.is_none() {
+                                        continue 'pattern; //Zero constructors for empty list
+                                    }
+                                    // new_row.push(head_element.clone().unwrap().clone());
+
+                                    // new_row.push(tail.clone().unwrap().as_ref().clone());
+
+                                    new_row.push(Pattern::Discard {
+                                        name: EcoString::new(),
+                                        location: location.clone(),
+                                        type_: type_.clone(),
+                                    });
+
+                                    new_row.push(Pattern::Discard {
+                                        name: EcoString::new(),
+                                        location: location.clone(),
+                                        type_: type_.clone(),
+                                    });
+
+                                }
+                                x => {
+                                    dbg!(x);
                                     todo!();
                                 }
                             },
@@ -1285,11 +1347,9 @@ fn heuristic_q(patterns: &Patterns) -> Vec<Score> {
     scores
 }
 
-
 fn heuristic_a(patterns: &Patterns, included: Vec<usize>) -> Vec<Score> {
     let mut scores = Vec::new();
     for column_idx in 0..patterns[0].len() {
-        
         if included.contains(&column_idx) {
             continue;
         }
@@ -1297,10 +1357,12 @@ fn heuristic_a(patterns: &Patterns, included: Vec<usize>) -> Vec<Score> {
         let mut constructors = HashMap::new();
         for row_idx in 0..patterns.len() {
             match &patterns[row_idx][column_idx] {
-                Pattern::Constructor { name, arguments, .. } => {
+                Pattern::Constructor {
+                    name, arguments, ..
+                } => {
                     let _ = constructors.insert(name.clone(), arguments.len());
-                },
-                _ => ()
+                }
+                _ => (),
             }
         }
 
@@ -1389,7 +1451,7 @@ fn score(patterns: &Patterns, f: Box<dyn Fn(&Pattern<Arc<Type>>) -> i32>) -> Vec
     scores
 }
 
-#[derive(Debug,Eq,PartialEq,Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum DecisionTree {
     Switch {
         discriminant: TypedExpr,
@@ -1408,17 +1470,20 @@ impl Hash for DecisionTree {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         core::mem::discriminant(self).hash(state);
         match self {
-            Switch { discriminant, cases } => {
+            Switch {
+                discriminant,
+                cases,
+            } => {
                 discriminant.hash(state);
                 cases.hash(state);
-            },
+            }
             Success { branch, bindings } => {
                 branch.hash(state);
                 for b in bindings.iter() {
                     b.hash(state);
                 }
-            },
-            Unreachable => {},
+            }
+            Unreachable => {}
         }
     }
 }

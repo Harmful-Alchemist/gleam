@@ -53,7 +53,7 @@ Deno.bench("Matching RBTs", async (b) => {
     b.end();
     // const huh = lol[0];
     // console.log(lol);
-    // console.log(huh);
+    console.log(huh);
     // let list = huh;
     // while (list.head) {
     //     console.log(list.head);

@@ -46,6 +46,7 @@ pub(crate) struct Generator<'module> {
     // frames.
     pub tail_recursion_used: bool,
     variant_count: &'module HashMap<(EcoString, EcoString), Vec<RecordConstructor<Arc<Type>>>>,
+    tree_count: usize
 }
 
 impl<'module> Generator<'module> {
@@ -81,6 +82,7 @@ impl<'module> Generator<'module> {
             function_position: Position::Tail,
             scope_position: Position::Tail,
             variant_count,
+            tree_count: 0,
         }
     }
 
@@ -571,6 +573,8 @@ impl<'module> Generator<'module> {
     // TODO switch the feature switches again!
     #[cfg(feature = "decisiontree")]
     fn case<'a>(&mut self, subject_values: &'a [TypedExpr], clauses: &'a [TypedClause]) -> Output {
+        let tree_number = self.tree_count;
+        self.tree_count += 1;
         // println!("Turn features back!");
         // dbg!("Turn features back!");
         // For matching expressions and not having to calculate each each time, var straigthforward else create a var and assign to expr.
@@ -595,7 +599,7 @@ impl<'module> Generator<'module> {
         let (tree, subtrees) =
             DecisionTreeGenerator::new(subject_values, clauses, self.variant_count.clone())
                 .to_tree();
-        dbg!(subtrees.len());
+        // dbg!(subtrees.len());
         // let tree = &tree;
         // println!("{tree:?}");
         // println!("got a tree!\n\n");
@@ -608,20 +612,24 @@ impl<'module> Generator<'module> {
         // let doc = self.decision_tree(tree, &subtrees)?;
         let mut xs: Vec<(DecisionTree,usize)> = subtrees.clone().into_iter().collect();
         xs.sort_by(|(_,a), (_,b)| b.cmp(a)); //reverse sort
+
+
+        
+
         let doc: Vec<Document> = xs
             .clone()
             // .keys()
             .into_iter()
-            .map(|(t,_)| self.decision_tree(t.clone(), &subtrees).unwrap())
+            .map(|(t,_)| self.decision_tree(t.clone(), &subtrees, tree_number).unwrap())
             .collect();
 
         // Ok(docvec![subject_assignments, doc].force_break())
         Ok(docvec![
             subject_assignments,
-            format!("let thingamajig = {};", subtrees.len()), //Last insert is toplevel node and we add 1 everywhere.
+            format!("let thingamajig{} = {};", tree_number, subtrees.len()), //Last insert is toplevel node and we add 1 everywhere.
             line(),
-            "pmloop: while (thingamajig) {",
-            "switch (thingamajig) {",
+            format!("pmloop{tree_number}: while (thingamajig{tree_number}) {{"),
+            format!("switch (thingamajig{tree_number}) {{"),
             doc,
             "}",
             "}",
@@ -634,6 +642,7 @@ impl<'module> Generator<'module> {
         &mut self,
         tree: DecisionTree,
         subtrees: &HashMap<DecisionTree, usize>,
+        tree_number: usize,
     ) -> Output {
         // dbg!(&tree);
         match tree.clone() {
@@ -656,6 +665,7 @@ impl<'module> Generator<'module> {
                         first,
                         only,
                         subtrees,
+                        tree_number
                     )?);
                     first = false;
                 }
@@ -749,7 +759,7 @@ impl<'module> Generator<'module> {
                     line(),
                     "}",
                     line(),
-                    "break pmloop;", //For the while true loop in lists
+                    format!("break pmloop{tree_number};"), //For the while true loop in lists
                     line()
                 ))
             }
@@ -772,15 +782,16 @@ impl<'module> Generator<'module> {
         first: bool,
         only: bool,
         subtrees: &HashMap<DecisionTree, usize>,
+        tree_number: usize
     ) -> Output {
         // let processed_tree = self.decision_tree(*tree, subtrees)?;
         let processed_tree = docvec!(
             format!(
-                "thingamajig = {};",
+                "thingamajig{} = {};", tree_number,
                 subtrees.get(tree.as_ref()).unwrap() + 1
             ),
             line(),
-            "continue pmloop;"
+            format!("continue pmloop{tree_number};"),
         );
         let check = match case {
             Case::ConstructorEquality { constructor, last } => {
@@ -853,6 +864,9 @@ impl<'module> Generator<'module> {
                 };
                 docvec!(
                     start,
+                    "!",
+                    var.clone(),
+                    " || ",
                     var,
                     ".hasLength(0)",
                     ") {",
@@ -885,6 +899,8 @@ impl<'module> Generator<'module> {
                 //TODO wrong
                 docvec!(
                     start,
+                    var.clone(),
+                    " && ",
                     var,
                     ".atLeastLength(1)",
                     ") {",

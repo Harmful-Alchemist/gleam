@@ -12,64 +12,327 @@ pub fn main() {
   // ]
 
   let cases = [
-  #(Red, 1, Node(Black, 1, Node(Black, 1, Empty, Empty), Node(Black, 3, Empty, Empty)), Node(Red, 1, Node(Black, 2, Empty, Empty), Node(Red, 3, Empty, Empty))),
-  #(Red, 1, Node(Red, 1, Node(Red, 3, Empty, Empty), Empty), Node(Red, 3, Node(Red, 2, Empty, Empty), Node(Red, 3, Empty, Empty))),
-  #(Red, 1, Node(Black, 2, Node(Black, 2, Empty, Empty), Node(Red, 3, Empty, Empty)), Node(Black, 3, Node(Black, 1, Empty, Empty), Node(Black, 2, Empty, Empty))),
-  #(Red, 1, Node(Black, 3, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty)), Node(Black, 3, Node(Black, 1, Empty, Empty), Node(Red, 3, Empty, Empty))),
-  #(Red, 1, Node(Black, 1, Empty, Empty), Node(Red, 1, Node(Red, 1, Empty, Empty), Node(Red, 2, Empty, Empty))),
-  #(Red, 1, Node(Black, 3, Node(Black, 3, Empty, Empty), Node(Red, 2, Empty, Empty)), Node(Black, 1, Node(Red, 1, Empty, Empty), Node(Red, 3, Empty, Empty))),
-  #(Red, 1, Node(Black, 3, Node(Black, 3, Empty, Empty), Node(Red, 2, Empty, Empty)), Node(Black, 2, Empty, Node(Black, 1, Empty, Empty))),
-  #(Red, 1, Node(Red, 3, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty)), Node(Red, 1, Node(Red, 1, Empty, Empty), Node(Black, 1, Empty, Empty))),
-  #(Black, 1, Node(Red, 1, Node(Black, 2, Empty, Empty), Empty), Node(Red, 1, Empty, Node(Black, 3, Empty, Empty))),
-  #(Black, 1, Node(Black, 2, Node(Black, 2, Empty, Empty), Node(Black, 1, Empty, Empty)), Node(Red, 3, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty))),
-  #(Black, 1, Node(Black, 3, Node(Black, 1, Empty, Empty), Node(Black, 3, Empty, Empty)), Node(Red, 3, Node(Red, 3, Empty, Empty), Node(Black, 3, Empty, Empty))),
-  #(Black, 1, Node(Red, 1, Node(Red, 1, Empty, Empty), Empty), Node(Red, 2, Node(Red, 1, Empty, Empty), Node(Red, 3, Empty, Empty))),
-  #(Black, 1, Node(Black, 2, Node(Black, 2, Empty, Empty), Node(Red, 3, Empty, Empty)), Node(Black, 1, Node(Black, 2, Empty, Empty), Node(Black, 1, Empty, Empty))),
-  #(Black, 1, Node(Red, 1, Node(Black, 2, Empty, Empty), Node(Red, 2, Empty, Empty)), Node(Red, 1, Node(Red, 1, Empty, Empty), Node(Black, 2, Empty, Empty))),
-  #(Black, 1, Node(Black, 1, Node(Black, 3, Empty, Empty), Empty), Node(Red, 3, Node(Black, 3, Empty, Empty), Node(Black, 1, Empty, Empty))),
-  #(Black, 1, Node(Black, 1, Node(Black, 1, Empty, Empty), Node(Red, 3, Empty, Empty)), Node(Black, 1, Empty, Node(Black, 1, Empty, Empty))),
-  #(Black, 1, Node(Black, 2, Empty, Node(Red, 3, Empty, Empty)), Node(Red, 3, Node(Red, 1, Empty, Empty), Empty)),
-  #(Red, 2, Node(Red, 2, Node(Red, 3, Empty, Empty), Empty), Node(Red, 2, Node(Black, 2, Empty, Empty), Node(Black, 1, Empty, Empty))),
-  #(Red, 2, Node(Red, 2, Node(Black, 1, Empty, Empty), Node(Red, 3, Empty, Empty)), Node(Black, 2, Node(Red, 1, Empty, Empty), Empty)),
-  #(Red, 2, Node(Black, 3, Node(Red, 1, Empty, Empty), Node(Black, 1, Empty, Empty)), Node(Red, 2, Empty, Node(Black, 3, Empty, Empty))),
-  #(Red, 2, Node(Red, 1, Node(Red, 2, Empty, Empty), Node(Black, 1, Empty, Empty)), Node(Red, 3, Node(Black, 1, Empty, Empty), Node(Black, 3, Empty, Empty))),
-  #(Red, 2, Node(Black, 3, Node(Black, 3, Empty, Empty), Node(Red, 1, Empty, Empty)), Node(Black, 2, Node(Red, 3, Empty, Empty), Empty)),
-  #(Red, 2, Node(Red, 3, Node(Black, 3, Empty, Empty), Node(Red, 1, Empty, Empty)), Node(Black, 2, Node(Black, 2, Empty, Empty), Node(Red, 3, Empty, Empty))),
-  #(Black, 2, Node(Black, 1, Node(Black, 2, Empty, Empty), Node(Red, 2, Empty, Empty)), Node(Red, 1, Empty, Empty)),
-  #(Black, 2, Node(Black, 2, Empty, Node(Black, 3, Empty, Empty)), Node(Red, 3, Node(Red, 3, Empty, Empty), Node(Red, 1, Empty, Empty))),
-  #(Black, 2, Node(Red, 2, Node(Red, 1, Empty, Empty), Node(Red, 2, Empty, Empty)), Node(Black, 3, Node(Black, 1, Empty, Empty), Node(Black, 2, Empty, Empty))),
-  #(Black, 2, Node(Red, 1, Empty, Node(Black, 3, Empty, Empty)), Node(Red, 1, Node(Black, 1, Empty, Empty), Node(Black, 2, Empty, Empty))),
-  #(Black, 2, Node(Red, 2, Node(Black, 2, Empty, Empty), Node(Red, 2, Empty, Empty)), Node(Black, 3, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty))),
-  #(Black, 2, Node(Black, 1, Node(Red, 1, Empty, Empty), Node(Black, 3, Empty, Empty)), Node(Red, 1, Node(Black, 1, Empty, Empty), Node(Red, 3, Empty, Empty))),
-  #(Black, 2, Node(Black, 3, Node(Black, 1, Empty, Empty), Node(Red, 3, Empty, Empty)), Node(Black, 2, Node(Black, 3, Empty, Empty), Node(Red, 2, Empty, Empty))),
-  #(Black, 2, Node(Red, 3, Node(Red, 1, Empty, Empty), Node(Black, 2, Empty, Empty)), Node(Red, 1, Node(Red, 1, Empty, Empty), Node(Red, 1, Empty, Empty))),
-  #(Black, 2, Node(Black, 2, Node(Red, 3, Empty, Empty), Node(Red, 3, Empty, Empty)), Node(Red, 3, Node(Red, 1, Empty, Empty), Node(Red, 2, Empty, Empty))),
-  #(Black, 2, Node(Black, 3, Node(Black, 3, Empty, Empty), Empty), Node(Black, 2, Node(Black, 3, Empty, Empty), Empty)),
-  #(Black, 2, Node(Black, 3, Node(Black, 2, Empty, Empty), Node(Red, 1, Empty, Empty)), Node(Black, 3, Node(Red, 3, Empty, Empty), Node(Black, 1, Empty, Empty))),
-  #(Black, 2, Node(Red, 2, Empty, Node(Red, 3, Empty, Empty)), Node(Black, 3, Node(Black, 3, Empty, Empty), Empty)),
-  #(Red, 3, Node(Red, 3, Node(Red, 3, Empty, Empty), Node(Black, 2, Empty, Empty)), Node(Red, 2, Node(Red, 2, Empty, Empty), Node(Red, 3, Empty, Empty))),
-  #(Red, 3, Node(Red, 1, Empty, Node(Black, 1, Empty, Empty)), Node(Red, 1, Node(Red, 3, Empty, Empty), Node(Black, 3, Empty, Empty))),
-  #(Red, 3, Node(Red, 2, Node(Red, 3, Empty, Empty), Node(Red, 1, Empty, Empty)), Node(Red, 3, Node(Black, 3, Empty, Empty), Node(Red, 3, Empty, Empty))),
-  #(Red, 3, Node(Black, 3, Node(Black, 1, Empty, Empty), Node(Red, 3, Empty, Empty)), Node(Black, 1, Node(Red, 3, Empty, Empty), Node(Black, 2, Empty, Empty))),
-  #(Red, 3, Node(Black, 1, Node(Black, 3, Empty, Empty), Empty), Node(Red, 1, Empty, Empty)),
-  #(Red, 3, Node(Red, 1, Node(Black, 2, Empty, Empty), Node(Black, 3, Empty, Empty)), Node(Black, 2, Node(Red, 3, Empty, Empty), Node(Red, 1, Empty, Empty))),
-  #(Red, 3, Node(Red, 2, Node(Red, 2, Empty, Empty), Empty), Node(Black, 2, Node(Red, 3, Empty, Empty), Node(Black, 3, Empty, Empty))),
-  #(Red, 3, Node(Black, 1, Node(Black, 3, Empty, Empty), Node(Black, 2, Empty, Empty)), Node(Red, 1, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty))),
-  #(Black, 3, Node(Red, 2, Node(Black, 1, Empty, Empty), Node(Black, 1, Empty, Empty)), Node(Black, 3, Node(Red, 2, Empty, Empty), Empty)),
-  #(Black, 3, Node(Red, 1, Node(Red, 1, Empty, Empty), Node(Red, 1, Empty, Empty)), Node(Black, 3, Node(Red, 3, Empty, Empty), Node(Red, 1, Empty, Empty))),
-  #(Black, 3, Node(Red, 2, Node(Black, 2, Empty, Empty), Node(Black, 2, Empty, Empty)), Node(Red, 2, Node(Red, 1, Empty, Empty), Node(Black, 1, Empty, Empty))),
-  #(Black, 3, Node(Black, 1, Node(Red, 3, Empty, Empty), Node(Black, 1, Empty, Empty)), Node(Red, 2, Node(Red, 3, Empty, Empty), Node(Red, 1, Empty, Empty))),
-  #(Black, 3, Node(Red, 2, Node(Black, 2, Empty, Empty), Node(Black, 3, Empty, Empty)), Node(Black, 1, Node(Red, 3, Empty, Empty), Empty)),
-  #(Black, 3, Node(Black, 1, Node(Black, 3, Empty, Empty), Empty), Node(Red, 1, Node(Red, 1, Empty, Empty), Node(Red, 2, Empty, Empty))),
-  #(Black, 3, Node(Red, 3, Node(Red, 3, Empty, Empty), Node(Red, 3, Empty, Empty)), Node(Red, 1, Empty, Node(Red, 1, Empty, Empty))),
-  #(Black, 3, Node(Red, 2, Node(Red, 3, Empty, Empty), Node(Red, 2, Empty, Empty)), Node(Red, 2, Node(Black, 1, Empty, Empty), Node(Red, 1, Empty, Empty))),
-  #(Black, 3, Node(Red, 1, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty)), Node(Black, 2, Node(Black, 2, Empty, Empty), Empty)),
-  #(Black, 3, Node(Red, 1, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty)), Node(Red, 1, Node(Black, 1, Empty, Empty), Node(Black, 3, Empty, Empty))),
-]
+    #(
+      Red,
+      1,
+      Node(Black, 1, Node(Black, 1, Empty, Empty), Node(Black, 3, Empty, Empty)),
+      Node(Red, 1, Node(Black, 2, Empty, Empty), Node(Red, 3, Empty, Empty)),
+    ),
+    #(
+      Red,
+      1,
+      Node(Red, 1, Node(Red, 3, Empty, Empty), Empty),
+      Node(Red, 3, Node(Red, 2, Empty, Empty), Node(Red, 3, Empty, Empty)),
+    ),
+    #(
+      Red,
+      1,
+      Node(Black, 2, Node(Black, 2, Empty, Empty), Node(Red, 3, Empty, Empty)),
+      Node(Black, 3, Node(Black, 1, Empty, Empty), Node(Black, 2, Empty, Empty)),
+    ),
+    #(
+      Red,
+      1,
+      Node(Black, 3, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty)),
+      Node(Black, 3, Node(Black, 1, Empty, Empty), Node(Red, 3, Empty, Empty)),
+    ),
+    #(
+      Red,
+      1,
+      Node(Black, 1, Empty, Empty),
+      Node(Red, 1, Node(Red, 1, Empty, Empty), Node(Red, 2, Empty, Empty)),
+    ),
+    #(
+      Red,
+      1,
+      Node(Black, 3, Node(Black, 3, Empty, Empty), Node(Red, 2, Empty, Empty)),
+      Node(Black, 1, Node(Red, 1, Empty, Empty), Node(Red, 3, Empty, Empty)),
+    ),
+    #(
+      Red,
+      1,
+      Node(Black, 3, Node(Black, 3, Empty, Empty), Node(Red, 2, Empty, Empty)),
+      Node(Black, 2, Empty, Node(Black, 1, Empty, Empty)),
+    ),
+    #(
+      Red,
+      1,
+      Node(Red, 3, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty)),
+      Node(Red, 1, Node(Red, 1, Empty, Empty), Node(Black, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      1,
+      Node(Red, 1, Node(Black, 2, Empty, Empty), Empty),
+      Node(Red, 1, Empty, Node(Black, 3, Empty, Empty)),
+    ),
+    #(
+      Black,
+      1,
+      Node(Black, 2, Node(Black, 2, Empty, Empty), Node(Black, 1, Empty, Empty)),
+      Node(Red, 3, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      1,
+      Node(Black, 3, Node(Black, 1, Empty, Empty), Node(Black, 3, Empty, Empty)),
+      Node(Red, 3, Node(Red, 3, Empty, Empty), Node(Black, 3, Empty, Empty)),
+    ),
+    #(
+      Black,
+      1,
+      Node(Red, 1, Node(Red, 1, Empty, Empty), Empty),
+      Node(Red, 2, Node(Red, 1, Empty, Empty), Node(Red, 3, Empty, Empty)),
+    ),
+    #(
+      Black,
+      1,
+      Node(Black, 2, Node(Black, 2, Empty, Empty), Node(Red, 3, Empty, Empty)),
+      Node(Black, 1, Node(Black, 2, Empty, Empty), Node(Black, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      1,
+      Node(Red, 1, Node(Black, 2, Empty, Empty), Node(Red, 2, Empty, Empty)),
+      Node(Red, 1, Node(Red, 1, Empty, Empty), Node(Black, 2, Empty, Empty)),
+    ),
+    #(
+      Black,
+      1,
+      Node(Black, 1, Node(Black, 3, Empty, Empty), Empty),
+      Node(Red, 3, Node(Black, 3, Empty, Empty), Node(Black, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      1,
+      Node(Black, 1, Node(Black, 1, Empty, Empty), Node(Red, 3, Empty, Empty)),
+      Node(Black, 1, Empty, Node(Black, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      1,
+      Node(Black, 2, Empty, Node(Red, 3, Empty, Empty)),
+      Node(Red, 3, Node(Red, 1, Empty, Empty), Empty),
+    ),
+    #(
+      Red,
+      2,
+      Node(Red, 2, Node(Red, 3, Empty, Empty), Empty),
+      Node(Red, 2, Node(Black, 2, Empty, Empty), Node(Black, 1, Empty, Empty)),
+    ),
+    #(
+      Red,
+      2,
+      Node(Red, 2, Node(Black, 1, Empty, Empty), Node(Red, 3, Empty, Empty)),
+      Node(Black, 2, Node(Red, 1, Empty, Empty), Empty),
+    ),
+    #(
+      Red,
+      2,
+      Node(Black, 3, Node(Red, 1, Empty, Empty), Node(Black, 1, Empty, Empty)),
+      Node(Red, 2, Empty, Node(Black, 3, Empty, Empty)),
+    ),
+    #(
+      Red,
+      2,
+      Node(Red, 1, Node(Red, 2, Empty, Empty), Node(Black, 1, Empty, Empty)),
+      Node(Red, 3, Node(Black, 1, Empty, Empty), Node(Black, 3, Empty, Empty)),
+    ),
+    #(
+      Red,
+      2,
+      Node(Black, 3, Node(Black, 3, Empty, Empty), Node(Red, 1, Empty, Empty)),
+      Node(Black, 2, Node(Red, 3, Empty, Empty), Empty),
+    ),
+    #(
+      Red,
+      2,
+      Node(Red, 3, Node(Black, 3, Empty, Empty), Node(Red, 1, Empty, Empty)),
+      Node(Black, 2, Node(Black, 2, Empty, Empty), Node(Red, 3, Empty, Empty)),
+    ),
+    #(
+      Black,
+      2,
+      Node(Black, 1, Node(Black, 2, Empty, Empty), Node(Red, 2, Empty, Empty)),
+      Node(Red, 1, Empty, Empty),
+    ),
+    #(
+      Black,
+      2,
+      Node(Black, 2, Empty, Node(Black, 3, Empty, Empty)),
+      Node(Red, 3, Node(Red, 3, Empty, Empty), Node(Red, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      2,
+      Node(Red, 2, Node(Red, 1, Empty, Empty), Node(Red, 2, Empty, Empty)),
+      Node(Black, 3, Node(Black, 1, Empty, Empty), Node(Black, 2, Empty, Empty)),
+    ),
+    #(
+      Black,
+      2,
+      Node(Red, 1, Empty, Node(Black, 3, Empty, Empty)),
+      Node(Red, 1, Node(Black, 1, Empty, Empty), Node(Black, 2, Empty, Empty)),
+    ),
+    #(
+      Black,
+      2,
+      Node(Red, 2, Node(Black, 2, Empty, Empty), Node(Red, 2, Empty, Empty)),
+      Node(Black, 3, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      2,
+      Node(Black, 1, Node(Red, 1, Empty, Empty), Node(Black, 3, Empty, Empty)),
+      Node(Red, 1, Node(Black, 1, Empty, Empty), Node(Red, 3, Empty, Empty)),
+    ),
+    #(
+      Black,
+      2,
+      Node(Black, 3, Node(Black, 1, Empty, Empty), Node(Red, 3, Empty, Empty)),
+      Node(Black, 2, Node(Black, 3, Empty, Empty), Node(Red, 2, Empty, Empty)),
+    ),
+    #(
+      Black,
+      2,
+      Node(Red, 3, Node(Red, 1, Empty, Empty), Node(Black, 2, Empty, Empty)),
+      Node(Red, 1, Node(Red, 1, Empty, Empty), Node(Red, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      2,
+      Node(Black, 2, Node(Red, 3, Empty, Empty), Node(Red, 3, Empty, Empty)),
+      Node(Red, 3, Node(Red, 1, Empty, Empty), Node(Red, 2, Empty, Empty)),
+    ),
+    #(
+      Black,
+      2,
+      Node(Black, 3, Node(Black, 3, Empty, Empty), Empty),
+      Node(Black, 2, Node(Black, 3, Empty, Empty), Empty),
+    ),
+    #(
+      Black,
+      2,
+      Node(Black, 3, Node(Black, 2, Empty, Empty), Node(Red, 1, Empty, Empty)),
+      Node(Black, 3, Node(Red, 3, Empty, Empty), Node(Black, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      2,
+      Node(Red, 2, Empty, Node(Red, 3, Empty, Empty)),
+      Node(Black, 3, Node(Black, 3, Empty, Empty), Empty),
+    ),
+    #(
+      Red,
+      3,
+      Node(Red, 3, Node(Red, 3, Empty, Empty), Node(Black, 2, Empty, Empty)),
+      Node(Red, 2, Node(Red, 2, Empty, Empty), Node(Red, 3, Empty, Empty)),
+    ),
+    #(
+      Red,
+      3,
+      Node(Red, 1, Empty, Node(Black, 1, Empty, Empty)),
+      Node(Red, 1, Node(Red, 3, Empty, Empty), Node(Black, 3, Empty, Empty)),
+    ),
+    #(
+      Red,
+      3,
+      Node(Red, 2, Node(Red, 3, Empty, Empty), Node(Red, 1, Empty, Empty)),
+      Node(Red, 3, Node(Black, 3, Empty, Empty), Node(Red, 3, Empty, Empty)),
+    ),
+    #(
+      Red,
+      3,
+      Node(Black, 3, Node(Black, 1, Empty, Empty), Node(Red, 3, Empty, Empty)),
+      Node(Black, 1, Node(Red, 3, Empty, Empty), Node(Black, 2, Empty, Empty)),
+    ),
+    #(
+      Red,
+      3,
+      Node(Black, 1, Node(Black, 3, Empty, Empty), Empty),
+      Node(Red, 1, Empty, Empty),
+    ),
+    #(
+      Red,
+      3,
+      Node(Red, 1, Node(Black, 2, Empty, Empty), Node(Black, 3, Empty, Empty)),
+      Node(Black, 2, Node(Red, 3, Empty, Empty), Node(Red, 1, Empty, Empty)),
+    ),
+    #(
+      Red,
+      3,
+      Node(Red, 2, Node(Red, 2, Empty, Empty), Empty),
+      Node(Black, 2, Node(Red, 3, Empty, Empty), Node(Black, 3, Empty, Empty)),
+    ),
+    #(
+      Red,
+      3,
+      Node(Black, 1, Node(Black, 3, Empty, Empty), Node(Black, 2, Empty, Empty)),
+      Node(Red, 1, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      3,
+      Node(Red, 2, Node(Black, 1, Empty, Empty), Node(Black, 1, Empty, Empty)),
+      Node(Black, 3, Node(Red, 2, Empty, Empty), Empty),
+    ),
+    #(
+      Black,
+      3,
+      Node(Red, 1, Node(Red, 1, Empty, Empty), Node(Red, 1, Empty, Empty)),
+      Node(Black, 3, Node(Red, 3, Empty, Empty), Node(Red, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      3,
+      Node(Red, 2, Node(Black, 2, Empty, Empty), Node(Black, 2, Empty, Empty)),
+      Node(Red, 2, Node(Red, 1, Empty, Empty), Node(Black, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      3,
+      Node(Black, 1, Node(Red, 3, Empty, Empty), Node(Black, 1, Empty, Empty)),
+      Node(Red, 2, Node(Red, 3, Empty, Empty), Node(Red, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      3,
+      Node(Red, 2, Node(Black, 2, Empty, Empty), Node(Black, 3, Empty, Empty)),
+      Node(Black, 1, Node(Red, 3, Empty, Empty), Empty),
+    ),
+    #(
+      Black,
+      3,
+      Node(Black, 1, Node(Black, 3, Empty, Empty), Empty),
+      Node(Red, 1, Node(Red, 1, Empty, Empty), Node(Red, 2, Empty, Empty)),
+    ),
+    #(
+      Black,
+      3,
+      Node(Red, 3, Node(Red, 3, Empty, Empty), Node(Red, 3, Empty, Empty)),
+      Node(Red, 1, Empty, Node(Red, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      3,
+      Node(Red, 2, Node(Red, 3, Empty, Empty), Node(Red, 2, Empty, Empty)),
+      Node(Red, 2, Node(Black, 1, Empty, Empty), Node(Red, 1, Empty, Empty)),
+    ),
+    #(
+      Black,
+      3,
+      Node(Red, 1, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty)),
+      Node(Black, 2, Node(Black, 2, Empty, Empty), Empty),
+    ),
+    #(
+      Black,
+      3,
+      Node(Red, 1, Node(Red, 2, Empty, Empty), Node(Red, 1, Empty, Empty)),
+      Node(Red, 1, Node(Black, 1, Empty, Empty), Node(Black, 3, Empty, Empty)),
+    ),
+  ]
 
-
-  map(cases, balance_tuple)
-
+  // map(cases, balance_tuple)
   // let cases = [
   //   #(R, R, R),
   //   #(R, R, B),
@@ -116,6 +379,10 @@ pub fn main() {
   // ]
 
   // map(cases, maranget2_tuple)
+
+  // sort([S(S(S(Zero))), S(Zero), S(S(Zero)), S(S(S(S(S(Zero))))), Zero, S(S(S(S(Zero))))])
+  sort([Zero])
+  // sort([Zero, S(Zero), S(S(Zero)), S(S(S(Zero))), Zero])
 }
 
 // fn maranget1(x, y) {
@@ -227,3 +494,61 @@ fn map_acc(xs, f, acc) {
   }
   // _ -> acc TODO!
 }
+
+pub type Number {
+  Zero
+  S(Number)
+}
+
+fn smaller(x, y) {
+  case x, y {
+    Zero, S(_) -> Tr
+    S(nx), S(ny) -> smaller(nx, ny)
+    _, Zero -> Fa
+  }
+}
+
+fn lenght(xs) {
+  case xs {
+    [] -> Zero
+    [x, ..ys] -> S(lenght(ys))
+  }
+}
+
+fn sort(elements) {
+  case elements {
+    [] -> []
+    [x, ..xs]  -> {
+      // let assert [x, ..xs] = elements
+      let len = lenght(elements)
+      sort_inner(x, xs, [], len, [])
+    }
+  }
+}
+
+type MyBool {
+  Tr
+  Fa
+}
+
+fn sort_inner(element_to_cmp, elements, acc, len, real_acc) {
+  // terrible bubble, not even worst case, also just case.
+  // length unnecces, now with real_acc
+  case element_to_cmp, elements, len, acc {
+    x, [y, ..ys], _, lacc -> {
+      let comp = smaller(x,y)
+      case comp {
+        Tr -> sort_inner(x, ys, [y, ..lacc], len, real_acc)
+        Fa -> sort_inner(y, ys, [x, ..lacc], len, real_acc)
+      }
+    }
+    x, [], S(a), [ac, ..accs] -> {
+      sort_inner(ac, accs, [], a, [x, ..real_acc])}
+    x, [], _, _ -> [x, ..real_acc]
+  }
+}
+
+// fn head(xs) {
+//   let assert [x, ..ys] = xs
+//   x
+// }
