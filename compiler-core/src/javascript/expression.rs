@@ -825,7 +825,6 @@ impl<'module> Generator<'module> {
                         todo!()
                     } // x => self.expression(&x)?
                 };
-                //TODO wrong
                 docvec!(
                     start,
                     var,
@@ -1140,9 +1139,9 @@ impl<'module> Generator<'module> {
                 };
                 docvec!(
                     start,
-                    "!",
-                    var.clone(),
-                    " || ",
+                    // "!",
+                    // var.clone(),
+                    // " || ",
                     var,
                     ".hasLength(0)",
                     ") {",
@@ -1175,8 +1174,8 @@ impl<'module> Generator<'module> {
                 //TODO wrong
                 docvec!(
                     start,
-                    var.clone(),
-                    " && ",
+                    // var.clone(),
+                    // " && ",
                     var,
                     ".atLeastLength(1)",
                     ") {",

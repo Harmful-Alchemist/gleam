@@ -5,7 +5,7 @@ const qbaFeature = Deno.args[1] === "true";
 console.log(`Using qba: ${qbaFeature}`);
 
 const switchFeature = Deno.args[2] === "true";
-console.log(`Using switch to deduplicate trees: ${qbaFeature}`);
+console.log(`Using switch to deduplicate trees: ${switchFeature}`);
 
 Deno.bench("Matching RBTs", async (b) => {
     const projectPath = "./test_rb_tree/";

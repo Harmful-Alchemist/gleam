@@ -381,8 +381,8 @@ pub fn main() {
   // map(cases, maranget2_tuple)
 
   // sort([S(S(S(Zero))), S(Zero), S(S(Zero)), S(S(S(S(S(Zero))))), Zero, S(S(S(S(Zero))))])
-  sort([Zero])
-  // sort([Zero, S(Zero), S(S(Zero)), S(S(S(Zero))), Zero])
+  // sort([Zero])
+  sort([Zero, S(Zero), S(S(Zero)), S(S(S(Zero))), Zero])
 }
 
 // fn maranget1(x, y) {
@@ -515,13 +515,22 @@ fn lenght(xs) {
   }
 }
 
+// fn sort(elements) {
+//   case elements {
+//     [] -> []
+//     [x, ..xs]  -> {
+//       // let assert [x, ..xs] = elements
+//       let len = lenght(xs)
+//       sort_inner(x, xs, [], len, [])
+//     }
+//   }
+// }
+
 fn sort(elements) {
   case elements {
     [] -> []
     [x, ..xs]  -> {
-      // let assert [x, ..xs] = elements
-      let len = lenght(elements)
-      sort_inner(x, xs, [], len, [])
+      sort_inner(x, xs, [], [])
     }
   }
 }
@@ -531,20 +540,45 @@ type MyBool {
   Fa
 }
 
-fn sort_inner(element_to_cmp, elements, acc, len, real_acc) {
+// fn sort_inner(element_to_cmp, elements, acc, len, real_acc) {
+//   // terrible bubble, not even worst case, also just case.
+//   // length unnecces, now with real_acc
+//   case element_to_cmp, elements, len, acc {
+//     x, [y, ..ys], _, lacc -> {
+//       let comp = smaller(x,y)
+//       case comp {
+//         Tr -> sort_inner(x, ys, [y, ..lacc], len, real_acc)
+//         Fa -> sort_inner(y, ys, [x, ..lacc], len, real_acc)
+//       }
+//     }
+//     x, [], S(a), [ac, ..accs] -> {
+//       sort_inner(ac, accs, [], a, [x, ..real_acc])}
+//     x, [], _, _ -> [x, ..real_acc]
+//   }
+// }
+
+fn sort_inner(element_to_cmp, elements, acc, real_acc) {
   // terrible bubble, not even worst case, also just case.
   // length unnecces, now with real_acc
-  case element_to_cmp, elements, len, acc {
-    x, [y, ..ys], _, lacc -> {
+  case element_to_cmp, elements, acc {
+    x, [y, ..ys], lacc -> {
       let comp = smaller(x,y)
-      case comp {
-        Tr -> sort_inner(x, ys, [y, ..lacc], len, real_acc)
-        Fa -> sort_inner(y, ys, [x, ..lacc], len, real_acc)
-      }
+      // case comp {
+      //   Tr -> sort_inner(x, ys, [y, ..lacc], real_acc)
+      //   Fa -> sort_inner(y, ys, [x, ..lacc], real_acc)
+      // }
+      mutual_inner(comp,x,y,ys,lacc,real_acc)
     }
-    x, [], S(a), [ac, ..accs] -> {
-      sort_inner(ac, accs, [], a, [x, ..real_acc])}
-    x, [], _, _ -> [x, ..real_acc]
+    x, [], [ac, ..accs] -> {
+      sort_inner(ac, accs, [], [x, ..real_acc])}
+    x, [], [] -> [x, ..real_acc]
+  }
+}
+
+fn mutual_inner(comp,x,y,ys,lacc,real_acc) {
+  case comp {
+        Tr -> sort_inner(x, ys, [y, ..lacc], real_acc)
+        Fa -> sort_inner(y, ys, [x, ..lacc], real_acc)
   }
 }
 

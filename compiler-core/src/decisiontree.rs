@@ -95,6 +95,48 @@ fn compile_tree(
 
     //Match always succeeds, is_empty uneccesary but clear
 
+    // The list success branches I'm detecting wrong for sure!
+    //Move more here from below? Nah
+    matrix.patterns.iter().enumerate().for_each(|(i, ps)| {
+        let mut pi = 0;
+        for p in ps {
+            match p {
+                Pattern::List {
+                    elements,
+                    tail: Some(tail),
+                    ..
+                } => {
+                    let (head_name, tail_name) = match (&elements[0], tail.as_ref()) {
+                        (
+                            Pattern::Variable { name: hn, .. },
+                            Pattern::Variable { name: tn, .. },
+                        ) => (hn.clone(), tn.clone()),
+                        _ => panic!(),
+                    };
+
+                    if !matrix.actions_and_env[i].1.contains_key(&head_name) {
+                        dbg!((&head_name, &tail_name));
+                        dbg!(&matrix.hs[pi]);
+
+                        let vn = match &matrix.hs[pi] {
+                            TypedExpr::Var { name, .. } => name,
+                            _ => panic!(),
+                        };
+
+                        let _ = matrix.actions_and_env[i]
+                            .1
+                            .insert(head_name, Binding::ListHead(vn.clone()));
+                        let _ = matrix.actions_and_env[i]
+                            .1
+                            .insert(tail_name, Binding::ListTail(vn.clone()));
+                    }
+                }
+                _ => (),
+            }
+            pi += 1
+        }
+    });
+
     //Two below seem to be going wrong.
     // dbg!(&matrix.patterns[0]);
     // dbg!(&matrix.actions_and_env.len());
@@ -111,6 +153,7 @@ fn compile_tree(
                 Pattern::Variable { name, .. } => {
                     if !bindings.contains_key(name) {
                         //TODO wellllllllllll Hmmmm Maybe just for list.... Else scop issues?
+                        // dbg!(&name);
                         let _ = bindings.insert(name.clone(), Binding::Expr(matrix.hs[i].clone()));
                     }
                     // Ok kinda fun but! Should be the tail etc from before! So do get the tags here before somehow that should have the right logic right except if started as list since then newer overwrites, fuck!
@@ -229,6 +272,9 @@ fn get_tags(
     match type_ {
         Type::Named { module, name, .. } => {
             let len = matrix.patterns.len();
+            let mut has_list = false;
+            let mut some_list = false;
+            let mut empty_list = false;
             // dbg!(len);
             for row_idx in 0..len {
                 // dbg!(&matrix.patterns[row_idx][i]);
@@ -262,17 +308,26 @@ fn get_tags(
 
                         //     todo!();
                         // }
+                        has_list = true;
                         if elements.len() == 1 {
-                            let _ = tags.push(Tag::List {
+                            let t = Tag::List {
                                 head_element: Some(elements[0].clone()),
                                 tail: tail.clone(),
-                            });
+                            };
+                            if !tags.contains(&t) {
+                                let _ = tags.push(t);
+                            }
+                            some_list = true;
                         } else if elements.len() == 0 && tail.is_none() {
                             //Empty list.
-                            let _ = tags.push(Tag::List {
+                            let t = Tag::List {
                                 head_element: None,
                                 tail: tail.clone(),
-                            });
+                            };
+                            if !tags.contains(&t) {
+                                let _ = tags.push(t);
+                            }
+                            empty_list = true;
                         } else {
                             todo!()
                         }
@@ -311,8 +366,16 @@ fn get_tags(
                     }
                 }
             } else {
-                // TODO
-                // List default case!
+                //Eh like gleam bool
+            }
+
+            if has_list {
+                match (some_list, empty_list) {
+                    (false, _) | (_, false) => {
+                        let _ = tags.push(Tag::T);
+                    }
+                    (_, _) => (),
+                }
             }
         }
         Type::Var { type_ } => {
@@ -458,7 +521,7 @@ fn compile_branch(
                             }
                         }
                         Tag::List { head_element, tail } => {
-                            dbg!("whut");
+                            // dbg!("whut");
                             // println!("{tag:?}");
                             // dbg!(&head_element);
                             // dbg!(tail);
@@ -467,14 +530,14 @@ fn compile_branch(
                                     //Empty list.
                                     // one columns jus head?
                                     // println!("elem no tail! {head_element:?}");
-                                    dbg!("Empty list");
+                                    // dbg!("Empty list");
                                     continue;
                                 }
                                 (Some(_), None) => {
                                     todo!()
                                 }
                                 (Some(p1), Some(p2)) => {
-                                    dbg!("some some list pattern");
+                                    // dbg!("some some list pattern");
                                     let p2 = p2.as_ref();
                                     match (p1, p2) {
                                         (
@@ -968,7 +1031,6 @@ fn compile_branch(
                                         location: location.clone(),
                                         type_: type_.clone(),
                                     });
-
                                 }
                                 x => {
                                     dbg!(x);
