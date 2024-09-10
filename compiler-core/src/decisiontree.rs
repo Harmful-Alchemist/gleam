@@ -115,8 +115,8 @@ fn compile_tree(
                     };
 
                     if !matrix.actions_and_env[i].1.contains_key(&head_name) {
-                        dbg!((&head_name, &tail_name));
-                        dbg!(&matrix.hs[pi]);
+                        // dbg!((&head_name, &tail_name));
+                        // dbg!(&matrix.hs[pi]);
 
                         let vn = match &matrix.hs[pi] {
                             TypedExpr::Var { name, .. } => name,
@@ -1012,7 +1012,7 @@ fn compile_branch(
                                     continue 'pattern;
                                 }
                                 Tag::List { head_element, tail } => {
-                                    dbg!("List tag for new row patterns with discard pattern");
+                                    // dbg!("List tag for new row patterns with discard pattern");
                                     if head_element.is_none() {
                                         continue 'pattern; //Zero constructors for empty list
                                     }

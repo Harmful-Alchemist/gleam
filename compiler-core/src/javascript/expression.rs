@@ -701,7 +701,8 @@ impl<'module> Generator<'module> {
                     // let d = self.assignment(constructor)?;
                     // binds.push(d);
                 }
-                let expr = self.expression(&branch)?;
+                // let expr = self.expression(&branch)?;
+                let expr = self.expression_flattening_blocks(&branch)?;
                 Ok(docvec!(binds, expr))
             }
             DecisionTree::Unreachable => Ok(self.throw_error(
@@ -1020,7 +1021,8 @@ impl<'module> Generator<'module> {
                     // let d = self.assignment(constructor)?;
                     // binds.push(d);
                 }
-                let expr = self.expression(&branch)?;
+                // let expr = self.expression(&branch)?;
+                let expr = self.expression_flattening_blocks(&branch)?;
                 Ok(docvec!(
                     format!("case {}:", subtrees.get(&tree).unwrap() + 1),
                     line(),

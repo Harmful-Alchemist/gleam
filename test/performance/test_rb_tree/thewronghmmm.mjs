@@ -1,8 +1,6 @@
 import { toList, prepend as listPrepend, CustomType as $CustomType } from "./build/dev/javascript/test_rb_tree/gleam.mjs";
 
 
-import { toList, prepend as listPrepend, CustomType as $CustomType } from "./gleam.mjs";
-
 export class Zero extends $CustomType { }
 
 export class S extends $CustomType {
@@ -16,6 +14,23 @@ class Tr extends $CustomType { }
 
 class Fa extends $CustomType { }
 
+function map_acc(loop$xs, loop$f, loop$acc) {
+  while (true) {
+    let xs = loop$xs;
+    let f = loop$f;
+    let acc = loop$acc;
+    if (xs.atLeastLength(1)) {
+      let x = xs.head;
+      let ys = xs.tail;
+      loop$xs = ys;
+      loop$f = f;
+      loop$acc = listPrepend(f(x), acc);
+    } else if (xs.hasLength(0)) {
+      return acc;
+    }
+  }
+}
+
 function smaller(loop$x, loop$y) {
   while (true) {
     let x = loop$x;
@@ -24,8 +39,8 @@ function smaller(loop$x, loop$y) {
       if (x instanceof Zero) {
         return new Tr();
       } else {
-        let nx = x[0];
         let ny = y[0];
+        let nx = x[0];
         loop$x = nx;
         loop$y = ny;
       }
@@ -45,47 +60,71 @@ function lenght(xs) {
   }
 }
 
-function mutual_inner(comp, x, y, ys, lacc, real_acc) {
-  if (comp instanceof Tr) {
-    return sort_inner(x, ys, listPrepend(y, lacc), real_acc);
-  } else {
-    return sort_inner(y, ys, listPrepend(x, lacc), real_acc);
-  }
-}
-
-function sort_inner(loop$element_to_cmp, loop$elements, loop$acc, loop$real_acc) {
+function sort_inner(
+  loop$element_to_cmp,
+  loop$elements,
+  loop$acc,
+  loop$len,
+  loop$real_acc
+) {
   while (true) {
     let element_to_cmp = loop$element_to_cmp;
     let elements = loop$elements;
     let acc = loop$acc;
+    let len = loop$len;
     let real_acc = loop$real_acc;
     if (elements.atLeastLength(1)) {
       let y = elements.head;
+      let ys = elements.tail;
       let x = element_to_cmp;
       let lacc = acc;
-      let ys = elements.tail;
-      return (() => {
+      // return (() => {
         let comp = smaller(x, y);
-        return mutual_inner(comp, x, y, ys, lacc, real_acc);
-      })();
+        if (comp instanceof Tr) {
+          loop$element_to_cmp = x;
+          loop$elements = ys;
+          loop$acc = listPrepend(y, lacc);
+          loop$len = len;
+          loop$real_acc = real_acc;
+        } else {
+          loop$element_to_cmp = y;
+          loop$elements = ys;
+          loop$acc = listPrepend(x, lacc);
+          loop$len = len;
+          loop$real_acc = real_acc;
+        }
+      // })();
     } else if (elements.hasLength(0)) {
       if (acc.atLeastLength(1)) {
-        let accs = acc.tail;
-        let x = element_to_cmp;
-        let ac = acc.head;
-        loop$element_to_cmp = ac;
-        loop$elements = accs;
-        loop$acc = toList([]);
-        loop$real_acc = listPrepend(x, real_acc);
+        if (len instanceof S) {
+          let ac = acc.head;
+          let a = len[0];
+          let accs = acc.tail;
+          let x = element_to_cmp;
+          loop$element_to_cmp = ac;
+          loop$elements = accs;
+          loop$acc = toList([]);
+          loop$len = a;
+          loop$real_acc = listPrepend(x, real_acc);
+        } else {
+          let x = element_to_cmp;
+          return listPrepend(x, real_acc);
+        }
       } else {
-        let accs = acc.tail;
-        let x = element_to_cmp;
-        let ac = acc.head;
-        loop$element_to_cmp = ac;
-        loop$elements = accs;
-        loop$acc = toList([]);
-        loop$real_acc = listPrepend(x, real_acc);
-        //TODO this should be different from above!!
+        if (len instanceof S) {
+          let ac = acc.head;
+          let a = len[0];
+          let accs = acc.tail;
+          let x = element_to_cmp;
+          loop$element_to_cmp = ac;
+          loop$elements = accs;
+          loop$acc = toList([]);
+          loop$len = a;
+          loop$real_acc = listPrepend(x, real_acc);
+        } else {
+          let x = element_to_cmp;
+          return listPrepend(x, real_acc);
+        }
       }
     }
   }
@@ -97,7 +136,10 @@ function sort(elements) {
   } else if (elements.atLeastLength(1)) {
     let x = elements.head;
     let xs = elements.tail;
-    return sort_inner(x, xs, toList([]), toList([]));
+    return (() => {
+      let len = lenght(xs);
+      return sort_inner(x, xs, toList([]), len, toList([]));
+    })();
   }
 }
 
@@ -113,5 +155,5 @@ export function main() {
   );
 }
 
-
-console.log(main());
+let x = main();
+console.log(x);
