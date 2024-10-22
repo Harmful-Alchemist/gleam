@@ -899,10 +899,10 @@ impl<'module> Generator<'module> {
         // Ok(docvec![subject_assignments, doc].force_break())
         Ok(docvec![
             subject_assignments,
-            format!("let thingamajig{} = {};", tree_number, subtrees.len()), //Last insert is toplevel node and we add 1 everywhere.
+            format!("let sub_tree_label{} = {};", tree_number, subtrees.len()), //Last insert is toplevel node and we add 1 everywhere.
             line(),
-            format!("pmloop{tree_number}: while (thingamajig{tree_number}) {{"),
-            format!("switch (thingamajig{tree_number}) {{"),
+            format!("pmloop{tree_number}: while (sub_tree_label{tree_number}) {{"),
+            format!("switch (sub_tree_label{tree_number}) {{"),
             doc,
             "}",
             "}",
@@ -1029,7 +1029,7 @@ impl<'module> Generator<'module> {
                     "{",
                     line(),
                     binds,
-                    // "thingamajig = false;",
+                    // "sub_tree_label = false;",
                     expr,
                     line(),
                     "}",
@@ -1063,7 +1063,7 @@ impl<'module> Generator<'module> {
         // let processed_tree = self.decision_tree(*tree, subtrees)?;
         let processed_tree = docvec!(
             format!(
-                "thingamajig{} = {};",
+                "sub_tree_label{} = {};",
                 tree_number,
                 subtrees.get(tree.as_ref()).unwrap() + 1
             ),
