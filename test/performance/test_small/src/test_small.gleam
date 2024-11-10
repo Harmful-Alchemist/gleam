@@ -1,19 +1,25 @@
 
 pub fn main() {
+    let x = t(Pink,Pink,Pink)
+    let y = x 
+    y+1
 }
 
 
 
 pub type Color {
-  Red
-  Black
+Red
+Black
+Purple
+Pink
 }
-
 pub fn t(x: Color,y: Color,z: Color) {
-  case x, y, z {
-    _, Red, Black -> 1
-    Red, Black, _ -> 2
-    _, _, Red -> 3
-    _, _, Black -> 4
-  }
+case x, y, z {
+_, Red, Black -> 1
+Red, Black, _ -> 2
+_, _, Red -> 3
+_, _, Black -> 4
+_,_, Purple -> 5
+_, _, Pink -> 6
+}
 }
